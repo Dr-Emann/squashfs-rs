@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="CPP_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize_derive/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize_derive/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/packed_serialize_derive/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/repr/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/repr/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/repr/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/repr/benches" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/packed_serialize/target" />
+      <excludeFolder url="file://$MODULE_DIR$/packed_serialize_derive/target" />
+      <excludeFolder url="file://$MODULE_DIR$/repr/target" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

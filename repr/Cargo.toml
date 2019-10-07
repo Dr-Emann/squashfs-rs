@@ -1,0 +1,11 @@
+[package]
+name = "repr"
+version = "0.1.0"
+authors = ["Zachary Dremann <dremann@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+packed_serialize = { path = "../packed_serialize" }
+bitflags = "1.1.0"

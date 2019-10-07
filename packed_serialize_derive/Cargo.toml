@@ -1,0 +1,17 @@
+[package]
+name = "packed_serialize_derive"
+version = "0.1.0"
+authors = ["Zachary Dremann <dremann@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+syn = { version = "1.0", features = ["extra-traits"] }
+quote = "1.0"
+proc-macro-crate = "0.1.4"
+
+[dev-dependencies]
+packed_serialize = { path = "../packed_serialize" }
