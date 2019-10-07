@@ -15,4 +15,3 @@ impl Id {
 
     pub const MAX: Id = Id::ZSTD;
 }
-

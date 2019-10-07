@@ -4,8 +4,8 @@ use packed_serialize::PackedStruct;
 use std::fmt;
 use std::fmt::Write;
 
-pub mod inode;
 pub mod compression;
+pub mod inode;
 pub mod superblock;
 
 pub const BLOCK_LOG_MIN: u16 = 12;
@@ -148,7 +148,7 @@ impl fmt::Display for Mode {
 
 #[test]
 fn mode_tests() {
-    let mode = Mode{ bits: 0o754 } | Mode::TYPE_FILE;
+    let mode = Mode { bits: 0o754 } | Mode::TYPE_FILE;
     assert_eq!(&format!("{}", mode), "-rwxr-xr--");
     let mode = mode | Mode::BIT_STICKY;
     assert_eq!(&format!("{}", mode), "-rwxr-xr-T");

@@ -1,5 +1,5 @@
-use packed_serialize::PackedStruct;
 use bitflags::bitflags;
+use packed_serialize::PackedStruct;
 
 use crate::{compression, inode};
 

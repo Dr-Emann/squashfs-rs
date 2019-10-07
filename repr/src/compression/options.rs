@@ -1,5 +1,5 @@
-use packed_serialize::PackedStruct;
 use bitflags::bitflags;
+use packed_serialize::PackedStruct;
 
 /// Compression options for the gzip compressor
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
@@ -19,7 +19,7 @@ impl Default for Gzip {
         Self {
             compression_level: 9,
             window_size: 15,
-            strategies: Default::default()
+            strategies: Default::default(),
         }
     }
 }
@@ -82,7 +82,7 @@ impl Default for Lz4 {
     fn default() -> Self {
         Self {
             version: 1,
-            flags: Default::default()
+            flags: Default::default(),
         }
     }
 }
