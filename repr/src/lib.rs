@@ -6,6 +6,7 @@ use std::fmt::Write;
 
 pub mod compression;
 pub mod directory;
+pub mod fragment;
 pub mod inode;
 pub mod superblock;
 
