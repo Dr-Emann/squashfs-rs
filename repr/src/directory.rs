@@ -15,7 +15,7 @@ pub struct Header {
     /// Hard links of course break the sequence and require a new header if they are further
     /// away than +/- 32k of this number. Inode number allocation and picking of the reference
     /// could of course be optimized to prevent this
-    pub inode_number: u32,
+    pub inode_number: inode::Idx,
 }
 
 /// A directory entry

@@ -17,6 +17,9 @@ impl Ref {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+pub struct Idx(pub u32);
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
 pub struct Kind(pub u16);
 
 impl Kind {
@@ -73,7 +76,7 @@ pub struct Header {
     /// used as a key to recreate hard links: when processing the archive,
     /// remember the visited values of inode_number. If an inode number has
     /// already been visited, this inode is hardlinked
-    pub inode_number: u32,
+    pub inode_number: Idx,
 }
 
 /// A basic directory inode structure
@@ -89,7 +92,7 @@ pub struct BasicDir {
     /// information starts
     pub block_offset: u16,
     /// The inode_number of the parent of this directory. If this is the root directory, this will be 1
-    pub parent_inode_number: u32,
+    pub parent_inode_number: Idx,
 }
 
 /// A full extended directory inode structure
@@ -105,7 +108,7 @@ pub struct ExtendedDir {
     /// The index of the block in the Directory Table where the directory entry information starts
     pub block_idx: u32,
     /// The inode_number of the parent of this directory. If this is the root directory, this will be 1
-    pub parent_inode_number: u32,
+    pub parent_inode_number: Idx,
     /// One less than the number of directory index entries following the inode structure
     pub index_count: u16,
     /// The (uncompressed) offset within the block in the Directory Table where the directory entry
