@@ -1,3 +1,4 @@
+use crate::xattr;
 use packed_serialize::PackedStruct;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
@@ -111,7 +112,7 @@ pub struct ExtendedDir {
     /// information starts
     pub block_offset: u16,
     /// An index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
-    pub xattr_idx: u32,
+    pub xattr_idx: xattr::Idx,
 }
 
 /// A basic file inode structure
@@ -172,7 +173,7 @@ pub struct ExtendedFile {
     /// An index into the xattr lookup table.
     ///
     /// Set to `0xFFFFFFFF` if the inode has no extended attributes
-    pub xattr_idx: u32,
+    pub xattr_idx: xattr::Idx,
 }
 
 /// A symlink inode structure
@@ -207,7 +208,7 @@ pub struct ExtendedDevice {
     /// The device represented
     pub device: DeviceNumber,
     /// An index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
-    pub xattr_idx: u32,
+    pub xattr_idx: xattr::Idx,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
@@ -242,5 +243,5 @@ pub struct ExtendedIpc {
     /// The number of hard links to this device
     pub hard_link_count: u32,
     /// An index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
-    pub xattr_idx: u32,
+    pub xattr_idx: xattr::Idx,
 }

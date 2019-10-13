@@ -1,5 +1,5 @@
-use packed_serialize::PackedStruct;
 use crate::inode;
+use packed_serialize::PackedStruct;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
 pub struct Header {

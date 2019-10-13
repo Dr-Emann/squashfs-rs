@@ -19,8 +19,7 @@ use generic_array::typenum::Unsigned;
 use generic_array::{ArrayLength, GenericArray};
 
 #[inline]
-pub fn read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<T>
-{
+pub fn read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<T> {
     let mut buf: GenericArray<u8, T::Size> = unsafe { mem::uninitialized() };
     reader.read_exact(&mut buf[..])?;
     Ok(T::from_packed(&buf))
@@ -53,8 +52,7 @@ pub fn read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<T>
 /// assert_eq!(my_struct.x, 0xADDE);
 /// assert_eq!(my_struct.y, 0xEFBE);
 /// ```
-pub fn try_read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<Option<T>>
-{
+pub fn try_read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<Option<T>> {
     let mut buf: GenericArray<u8, T::Size> = unsafe { mem::uninitialized() };
     let mut slice = &mut buf[..];
     // Try to read until we get a non-interrupted read.
@@ -96,8 +94,8 @@ pub trait PackedStruct {
     }
 
     fn from_packed(array: &GenericArray<u8, Self::Size>) -> Self
-        where
-            Self: Sized;
+    where
+        Self: Sized;
     fn read_packed_arr(&mut self, arr: &GenericArray<u8, Self::Size>);
     fn write_packed_arr(&self, arr: &mut GenericArray<u8, Self::Size>);
 }
@@ -108,8 +106,7 @@ macro_rules! packed_impl {
             type Size = $size;
 
             #[inline]
-            fn from_packed(array: &GenericArray<u8, Self::Size>) -> Self
-            {
+            fn from_packed(array: &GenericArray<u8, Self::Size>) -> Self {
                 <$ty_name>::from_le(unsafe {
                     #[allow(clippy::cast_ptr_alignment)]
                     ptr::read_unaligned(array.as_slice().as_ptr() as *const Self)

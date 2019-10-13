@@ -137,7 +137,6 @@ impl Archive {
 
         self.file.write_all_at(&superblock.to_packed(), 0)?;
 
-
         Ok(())
     }
 }
