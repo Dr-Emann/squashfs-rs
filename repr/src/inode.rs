@@ -1,4 +1,4 @@
-use crate::xattr;
+use crate::{uid_gid, xattr};
 use packed_serialize::PackedStruct;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
@@ -64,9 +64,9 @@ pub struct Header {
     /// The values match with the permission values of mode_t (the mode bits, not the file type)
     pub permissions: super::Mode,
     /// The index of the user id in the UID/GID Table
-    pub uid_idx: u16,
+    pub uid_idx: uid_gid::Idx,
     /// The index of the group id in the UID/GID Table
-    pub gid_idx: u16,
+    pub gid_idx: uid_gid::Idx,
     /// The unsigned number of seconds (not counting leap seconds) since 00:00, Jan 1 1970 UTC
     /// when the item described by the inode was last modified
     pub modified_time: u32,

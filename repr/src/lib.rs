@@ -9,6 +9,7 @@ pub mod directory;
 pub mod fragment;
 pub mod inode;
 pub mod superblock;
+pub mod uid_gid;
 pub mod xattr;
 
 pub const BLOCK_LOG_MIN: u16 = 12;
