@@ -1,6 +1,6 @@
 //! Metadata blocks are compressed in 8KiB blocks. A metadata block is prefixed by a u16 header.
 //! The highest bit of the header is set if the block is stored uncompressed (this will happen if
-//! the block grew when compressed, or e.g. the `UNCOMPRESSED_INODES` superblock flag is set).
+//! the block grew when compressed, or e.g. the [`UNCOMPRESSED_INODES`] superblock flag is set).
 //! The lower 15 bits specifies the size of the metadata block (not including the header) on disk.
 //!
 //! To read a metadata block, read a u16.
@@ -23,6 +23,8 @@
 //! Neither the size on disk, nor the compressed size should exceed 8KiB. The uncompressed size
 //! should always be equal to 8KiB, with the exception of the last metadata block of a section,
 //! which may have an uncompressed size less than 8KiB.
+//!
+//! [`UNCOMPRESSED_INODES`]: ../superblock/struct.Flags.html#associatedconstant.UNCOMPRESSED_INODES
 
 use packed_serialize::PackedStruct;
 

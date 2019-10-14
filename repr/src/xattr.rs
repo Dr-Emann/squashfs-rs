@@ -7,12 +7,14 @@
 //! inodes. To saves space, the topmost namespace prefix is removed and encoded as an integer ID
 //! instead. This approach limits squashfs xattr support to the following, commonly used namespaces:
 //!
+//! ```text
 //! 0 - user.
 //! 1 - trusted.
 //! 2 - security.
+//! ```
 //!
 //! This means that on the one hand squashfs can store SELinux labels or capabilities since those
-//! are stored in the security.* namespaces, but cannot store ACLs which are stored in
+//! are stored in the `security.*` namespaces, but cannot store ACLs which are stored in
 //! system.posix_acl_access because it has no way to encode the system. prefix yet.
 //!
 //! The key value pairs of all inodes are stored consecutively in metadata blocks. The values can
