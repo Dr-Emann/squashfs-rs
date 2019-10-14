@@ -1,3 +1,15 @@
+//! A squashfs filesystem consists of a maximum of nine parts, packed together on a byte alignment:
+//!
+//! * [Superblock](superblock/index.html)
+//! * [Compression Options](compression/options/index.html)
+//! * [Datablocks & Fragments]
+//! * [Inode Table](inode/index.html)
+//! * [Directory Table](directory/index.html)
+//! * [Fragment Table](fragment/index.html)
+//! * [Export Table]
+//! * [UID/GID Lookup Table](uid_gid/index.html)
+//! * [Xattr Table](xattr/index.html)
+
 use bitflags::bitflags;
 use packed_serialize::PackedStruct;
 

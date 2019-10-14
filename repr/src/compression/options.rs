@@ -1,3 +1,7 @@
+//! Compression Options
+//!
+//! If non-default compression options have been used, then these are stored here.
+
 use bitflags::bitflags;
 use packed_serialize::PackedStruct;
 

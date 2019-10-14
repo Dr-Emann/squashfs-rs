@@ -1,3 +1,7 @@
+//! Inode Table
+//!
+//! Metadata (ownership, permissions, etc) for items in the archive
+
 use crate::{uid_gid, xattr};
 use packed_serialize::PackedStruct;
 

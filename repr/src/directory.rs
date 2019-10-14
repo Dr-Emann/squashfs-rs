@@ -1,3 +1,7 @@
+//! Directory Table
+//!
+//! Directory listings, including file names, and references to inodes
+
 use crate::inode;
 use packed_serialize::PackedStruct;
 

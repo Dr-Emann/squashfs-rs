@@ -1,3 +1,5 @@
+//! Methods of compression
+
 use packed_serialize::PackedStruct;
 
 pub mod options;

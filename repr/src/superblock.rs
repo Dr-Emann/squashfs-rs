@@ -1,3 +1,7 @@
+//! Superblock
+//!
+//! Important information about the archive, including locations of other sections
+
 use bitflags::bitflags;
 use packed_serialize::PackedStruct;
 
