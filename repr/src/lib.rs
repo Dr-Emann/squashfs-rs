@@ -8,6 +8,7 @@ pub mod compression;
 pub mod directory;
 pub mod fragment;
 pub mod inode;
+pub mod metablock;
 pub mod superblock;
 pub mod uid_gid;
 pub mod xattr;
