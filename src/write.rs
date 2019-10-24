@@ -113,21 +113,21 @@ impl Archive {
 
     pub fn flush(self) -> Result<()> {
         let mod_time = self.modified_time.unwrap_or_else(|| Utc::now());
-        let superblock = repr::Superblock {
-            magic: repr::MAGIC,
+        let superblock = repr::superblock::Superblock {
+            magic: repr::superblock::MAGIC,
             inode_count: 1,
             modification_time: mod_time.timestamp() as i32,
             block_size: repr::BLOCK_SIZE_DEFAULT,
             fragment_entry_count: 0,
-            compression_id: repr::CompressionId::GZIP,
+            compression_id: repr::compression::Id::GZIP,
             block_log: repr::BLOCK_LOG_DEFAULT,
-            flags: repr::Flags::empty(),
+            flags: repr::superblock::Flags::empty(),
             id_count: 0,
-            version_major: repr::VERSION_MAJOR,
-            version_minor: repr::VERSION_MINOR,
-            root_inode_ref: repr::InodeRef(0),
-            bytes_used: repr::Superblock::size() as u64,
-            id_table_start: repr::Superblock::size() as u64,
+            version_major: repr::superblock::VERSION_MAJOR,
+            version_minor: repr::superblock::VERSION_MINOR,
+            root_inode_ref: repr::inode::Ref(0),
+            bytes_used: repr::superblock::Superblock::size() as u64,
+            id_table_start: repr::superblock::Superblock::size() as u64,
             xattr_id_table_start: !0,
             inode_table_start: !0,
             directory_table_start: !0,
