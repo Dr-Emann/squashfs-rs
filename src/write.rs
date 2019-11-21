@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::config::FragmentMode;
 use crate::shared_position_file::SharedWriteAt;
 
-use crate::CompressionType;
+use crate::compression::Kind;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -60,7 +60,7 @@ pub struct Config {
     pub find_duplicates: bool,
     pub exportable: bool,
     pub fragment_mode: FragmentMode,
-    pub compressor: CompressionType,
+    pub compressor: Kind,
 }
 
 impl Default for Config {
@@ -76,7 +76,7 @@ impl Default for Config {
             find_duplicates: true,
             exportable: true,
             fragment_mode: FragmentMode::default(),
-            compressor: CompressionType::default(),
+            compressor: Kind::default(),
         }
     }
 }
