@@ -20,7 +20,7 @@ use generic_array::{ArrayLength, GenericArray};
 
 #[inline]
 pub fn read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<T> {
-    let mut buf: GenericArray<u8, T::Size> = unsafe { mem::uninitialized() };
+    let mut buf: GenericArray<u8, T::Size> = unsafe { mem::MaybeUninit::uninit().assume_init() };
     reader.read_exact(&mut buf[..])?;
     Ok(T::from_packed(&buf))
 }
@@ -53,7 +53,7 @@ pub fn read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<T> {
 /// assert_eq!(my_struct.y, 0xEFBE);
 /// ```
 pub fn try_read<T: PackedStruct, R: io::Read>(mut reader: R) -> io::Result<Option<T>> {
-    let mut buf: GenericArray<u8, T::Size> = unsafe { mem::uninitialized() };
+    let mut buf: GenericArray<u8, T::Size> = unsafe { mem::MaybeUninit::uninit().assume_init() };
     let mut slice = &mut buf[..];
     // Try to read until we get a non-interrupted read.
     // If the first non-interrupted read is EOF, return None,
@@ -88,7 +88,8 @@ pub trait PackedStruct {
     }
 
     fn to_packed(&self) -> GenericArray<u8, Self::Size> {
-        let mut arr: GenericArray<u8, Self::Size> = unsafe { mem::uninitialized() };
+        let mut arr: GenericArray<u8, Self::Size> =
+            unsafe { mem::MaybeUninit::uninit().assume_init() };
         self.write_packed_arr(&mut arr);
         arr
     }
