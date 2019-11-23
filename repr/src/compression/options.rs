@@ -14,8 +14,9 @@ pub struct Gzip {
     pub window_size: u16,
     /// A bitfield describing the enabled strategies.
     ///
+    /// See `GzipStrategies`.
     /// If no flags are set, the default strategy is implicitly used.
-    pub strategies: GzipStrategies,
+    pub strategies: u16,
 }
 
 impl Default for Gzip {

@@ -1,10 +1,8 @@
 use flate2::{FlushCompress, FlushDecompress};
-use packed_serialize::PackedStruct;
 use std::cell::{RefCell, RefMut};
 use std::io;
 
-const DEFAULT_COMPRESSION_LEVEL: u32 = 9;
-const DEFAULT_WINDOW_SIZE: u16 = 15;
+pub type Config = repr::compression::options::Gzip;
 
 #[derive(Debug)]
 struct State {
@@ -16,13 +14,6 @@ struct State {
 pub struct Gzip {
     config: Config,
     state: thread_local::CachedThreadLocal<RefCell<State>>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
-pub struct Config {
-    compression_level: u32,
-    window_size: u16,
-    strategy: u16,
 }
 
 impl Gzip {
@@ -105,16 +96,6 @@ impl super::Compress for Gzip {
             }
         }
         Ok(decompressor.total_out() as usize)
-    }
-}
-
-impl Default for Config {
-    fn default() -> Config {
-        Config {
-            compression_level: DEFAULT_COMPRESSION_LEVEL,
-            window_size: DEFAULT_WINDOW_SIZE,
-            strategy: 0,
-        }
     }
 }
 
