@@ -1,4 +1,4 @@
-use squashfs_rs::write::{Archive, Config};
+use sqfs::write::{Archive, Config};
 
 fn main() {
     let config = Config::new();

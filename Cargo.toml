@@ -1,5 +1,5 @@
 [package]
-name = "squashfs_rs"
+name = "sqfs"
 version = "0.1.0"
 authors = ["Zachary Dremann <dremann@gmail.com>"]
 edition = "2018"
