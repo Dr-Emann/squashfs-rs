@@ -1,6 +1,5 @@
 use parking_lot::Mutex;
-use positioned_io::RandomAccessFile;
-use positioned_io::WriteAt;
+use positioned_io::{RandomAccessFile, ReadAt, WriteAt};
 use std::io;
 
 pub trait SharedWriteAt: Send + Sync {
@@ -37,44 +36,6 @@ impl<W: SharedWriteAt> SharedWriteAt for &W {
     }
 }
 
-pub struct PositionedWriter<W> {
-    writer: W,
-    position: u64,
-}
-
-impl<W: SharedWriteAt> PositionedWriter<W> {
-    pub fn new(writer: W) -> Self {
-        Self {
-            writer,
-            position: 0,
-        }
-    }
-
-    pub fn with_position(writer: W, position: u64) -> Self {
-        Self { writer, position }
-    }
-}
-
-impl<W: SharedWriteAt> io::Write for PositionedWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let position = self.position;
-        let res = self.writer.write_at(buf, position)?;
-        self.position += res as u64;
-        Ok(res)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
-    }
-
-    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        let position = self.position;
-        self.writer.write_all_at(buf, position)?;
-        self.position += buf.len() as u64;
-        Ok(())
-    }
-}
-
 impl<W: WriteAt + Sync + Send> SharedWriteAt for Mutex<W> {
     fn write_at(&self, buf: &[u8], pos: u64) -> io::Result<usize> {
         self.lock().write_at(pos, buf)
@@ -86,5 +47,49 @@ impl<W: WriteAt + Sync + Send> SharedWriteAt for Mutex<W> {
 
     fn flush(&self) -> io::Result<()> {
         self.lock().flush()
+    }
+}
+
+pub struct Positioned<F> {
+    file: F,
+    position: u64,
+}
+
+impl<W> Positioned<W> {
+    pub fn new(file: W) -> Self {
+        Self { file, position: 0 }
+    }
+
+    pub fn with_position(file: W, position: u64) -> Self {
+        Self { file, position }
+    }
+}
+
+impl<W: SharedWriteAt> io::Write for Positioned<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let position = self.position;
+        let res = self.file.write_at(buf, position)?;
+        self.position += res as u64;
+        Ok(res)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.file.flush()
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        let position = self.position;
+        self.file.write_all_at(buf, position)?;
+        self.position += buf.len() as u64;
+        Ok(())
+    }
+}
+
+impl<R: ReadAt> io::Read for Positioned<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let position = self.position;
+        let res = self.file.read_at(position, buf)?;
+        self.position += res as u64;
+        Ok(res)
     }
 }

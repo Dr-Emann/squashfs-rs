@@ -16,7 +16,7 @@ pub enum Kind {
     Unknown = 0,
 }
 
-trait Compress: Default {
+trait Compress {
     fn load(options: &[u8]) -> io::Result<Self>
     where
         Self: Sized;
@@ -44,7 +44,7 @@ impl Default for Kind {
 }
 
 impl Kind {
-    pub fn by_name(name: &str) -> Kind {
+    pub fn from_name(name: &str) -> Kind {
         match name {
             "gzip" => Kind::ZLib,
             "lzma" => Kind::Lzma,
@@ -56,8 +56,8 @@ impl Kind {
         }
     }
 
-    pub fn by_id(id: u16) -> Kind {
-        match CompressionId(id) {
+    pub fn from_id(id: CompressionId) -> Kind {
+        match id {
             CompressionId::GZIP => Kind::ZLib,
             CompressionId::LZMA => Kind::Lzma,
             CompressionId::LZO => Kind::Lzo,
@@ -94,5 +94,23 @@ impl Kind {
             Kind::Zstd => cfg!(feature = "zstd"),
             Kind::Unknown => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gzip_compressor() {
+        let c = gzip::Gzip::default();
+        let src: &[u8] = b"11111111111111111111111111111111111c111";
+        let mut dest = [0; 64];
+        let mut clear_dest = vec![0u8; src.len()];
+        let dest_size = c.compress(src, &mut dest).expect("compression");
+        let clear_size = c
+            .decompress(&dest[..dest_size], &mut clear_dest)
+            .expect("decompression");
+        assert_eq!(&src[..], &clear_dest[..clear_size]);
     }
 }

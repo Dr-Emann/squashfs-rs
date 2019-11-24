@@ -112,8 +112,8 @@ impl State {
 
 fn min_mem(file_size: u64, mem_size: usize) -> usize {
     if file_size < mem_size as u64 {
-        mem_size
-    } else {
         file_size as usize
+    } else {
+        mem_size
     }
 }
