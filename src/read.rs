@@ -6,6 +6,7 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub struct Archive<R> {
     inner: Arc<ArchiveInner<R>>,
 }
@@ -13,6 +14,7 @@ pub struct Archive<R> {
 #[derive(Debug)]
 struct ArchiveInner<R> {
     reader: R,
+    superblock: repr::superblock::Superblock,
     compressor: compression::Compressor,
 }
 
@@ -34,6 +36,19 @@ impl<R: ReadAt> Archive<R> {
                 "Unsupported compression",
             ));
         }
-        unimplemented!()
+
+        let compressor = compression_kind.compressor();
+        // TODO: Load compression options
+        assert!(!superblock
+            .flags
+            .contains(repr::superblock::Flags::COMPRESSOR_OPTIONS));
+
+        Ok(Self {
+            inner: Arc::new(ArchiveInner {
+                reader,
+                superblock,
+                compressor,
+            }),
+        })
     }
 }

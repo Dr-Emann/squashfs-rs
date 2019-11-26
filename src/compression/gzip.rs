@@ -20,6 +20,7 @@ impl Gzip {
     fn state(&self) -> &RefCell<State> {
         self.state.get_or(|| RefCell::new(State::new(self.config)))
     }
+
     fn decompressor(&self) -> RefMut<flate2::Decompress> {
         let state = self.state().borrow_mut();
         let mut decompressor = RefMut::map(state, |s| &mut s.decompressor);
@@ -36,11 +37,8 @@ impl Gzip {
 }
 
 impl super::Compress for Gzip {
-    fn load(options: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        let config: Config = packed_serialize::try_read(options)?.unwrap_or_default();
+    fn configure(&mut self, options: &[u8]) -> io::Result<()> {
+        let config: Config = packed_serialize::read(options)?;
         if config.compression_level < 1 || config.compression_level > 9 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -53,11 +51,8 @@ impl super::Compress for Gzip {
                 format!("Invalid window size ({})", config.window_size),
             ));
         }
-        Ok(Self {
-            config,
-            state: thread_local::CachedThreadLocal::new(),
-            // state: flate2::Decompress::new(true),
-        })
+        self.config = config;
+        Ok(())
     }
 
     fn compress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {

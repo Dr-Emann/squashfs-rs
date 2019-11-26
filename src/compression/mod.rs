@@ -16,10 +16,8 @@ pub enum Kind {
     Unknown = 0,
 }
 
-trait Compress {
-    fn load(options: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized;
+trait Compress: Default {
+    fn configure(&mut self, options: &[u8]) -> io::Result<()>;
 
     fn compress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
     fn decompress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
@@ -29,6 +27,15 @@ trait Compress {
 pub enum Compressor {
     #[cfg(feature = "gzip")]
     Gzip(gzip::Gzip),
+}
+
+impl Compressor {
+    pub fn configure(&mut self, options: &[u8]) -> io::Result<()> {
+        match *self {
+            #[cfg(feature = "gzip")]
+            Compressor::Gzip(ref mut gzip) => gzip.configure(options),
+        }
+    }
 }
 
 impl fmt::Display for Kind {
@@ -93,6 +100,15 @@ impl Kind {
             Kind::Lz4 => cfg!(feature = "lz4"),
             Kind::Zstd => cfg!(feature = "zstd"),
             Kind::Unknown => false,
+        }
+    }
+
+    pub fn compressor(self) -> Compressor {
+        match self {
+            Kind::ZLib => Compressor::Gzip(Default::default()),
+            Kind::Lzma | Kind::Lzo | Kind::Xz | Kind::Lz4 | Kind::Zstd | Kind::Unknown => {
+                unimplemented!()
+            }
         }
     }
 }
