@@ -1,4 +1,3 @@
-use crate::compression::Compress;
 use flate2::{FlushCompress, FlushDecompress};
 use std::cell::{RefCell, RefMut};
 use std::io;

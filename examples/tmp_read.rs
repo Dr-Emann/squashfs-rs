@@ -15,7 +15,7 @@ fn real_main() -> i32 {
     builder.format(Format::Full);
     let logger = builder.build().unwrap();
 
-    let archive = match Archive::open_with_logger("tmp.squashfs", logger.clone()) {
+    let _archive = match Archive::open_with_logger("tmp.squashfs", logger.clone()) {
         Ok(archive) => archive,
         Err(e) => {
             slog::crit!(logger, "{}", e);
