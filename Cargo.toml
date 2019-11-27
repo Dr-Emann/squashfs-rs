@@ -25,6 +25,7 @@ chrono = "0.4.6"
 parking_lot = "0.9.0"
 slog = "2.5.2"
 slog-stdlog = "4.0.0"
+snafu = "0.6.0"
 thread_local = "1.0.0"
 
 flate2 = { version = "1.0.12", optional = true }

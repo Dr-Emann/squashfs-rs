@@ -1,3 +1,4 @@
+use crate::compression::Compress;
 use flate2::{FlushCompress, FlushDecompress};
 use std::cell::{RefCell, RefMut};
 use std::io;
@@ -37,6 +38,8 @@ impl Gzip {
 }
 
 impl super::Compress for Gzip {
+    type Config = Config;
+
     fn configure(&mut self, options: &[u8]) -> io::Result<()> {
         let config: Config = packed_serialize::read(options)?;
         if config.compression_level < 1 || config.compression_level > 9 {
@@ -91,6 +94,10 @@ impl super::Compress for Gzip {
             }
         }
         Ok(decompressor.total_out() as usize)
+    }
+
+    fn config(&self) -> &Self::Config {
+        &self.config
     }
 }
 

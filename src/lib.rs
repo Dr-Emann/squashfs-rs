@@ -4,4 +4,6 @@ mod compression;
 pub mod config;
 pub mod read;
 pub mod shared_position_file;
-pub mod write;
+// pub mod write;
+
+pub(crate) mod errors;

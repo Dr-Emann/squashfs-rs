@@ -36,7 +36,7 @@ pub struct Superblock {
     /// corrupt
     pub block_log: u16,
     /// See [`Flags`](struct.Flags.html)
-    pub flags: Flags,
+    pub flags: u16,
     /// The number of entries in the id lookup table
     pub id_count: u16,
     /// The major version of the squashfs file format. Should always equal

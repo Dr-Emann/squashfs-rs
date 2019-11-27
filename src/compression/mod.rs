@@ -17,10 +17,14 @@ pub enum Kind {
 }
 
 trait Compress: Default {
+    type Config: fmt::Debug + ?Sized;
+
     fn configure(&mut self, options: &[u8]) -> io::Result<()>;
 
     fn compress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
     fn decompress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
+
+    fn config(&self) -> &Self::Config;
 }
 
 #[derive(Debug)]
@@ -34,6 +38,13 @@ impl Compressor {
         match *self {
             #[cfg(feature = "gzip")]
             Compressor::Gzip(ref mut gzip) => gzip.configure(options),
+        }
+    }
+
+    pub fn config<'a>(&'a self) -> impl fmt::Debug + 'a {
+        match *self {
+            #[cfg(feature = "gzip")]
+            Compressor::Gzip(ref gzip) => gzip.config(),
         }
     }
 }
@@ -105,10 +116,9 @@ impl Kind {
 
     pub fn compressor(self) -> Compressor {
         match self {
+            #[cfg(feature = "gzip")]
             Kind::ZLib => Compressor::Gzip(Default::default()),
-            Kind::Lzma | Kind::Lzo | Kind::Xz | Kind::Lz4 | Kind::Zstd | Kind::Unknown => {
-                unimplemented!()
-            }
+            _ => panic!("Unsupported compressor kind {}", self),
         }
     }
 }
@@ -117,6 +127,7 @@ impl Kind {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "gzip")]
     #[test]
     fn gzip_compressor() {
         let c = gzip::Gzip::default();
