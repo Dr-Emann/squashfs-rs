@@ -34,6 +34,8 @@ pub const SIZE: usize = 8 * 1024;
 
 pub const COMPRESSED_FLAG: u16 = 0x8000;
 
+pub type Metablock = [u8; SIZE];
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
 pub struct Header(pub u16);
 

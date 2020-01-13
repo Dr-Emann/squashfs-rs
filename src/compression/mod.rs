@@ -47,6 +47,27 @@ impl Compressor {
             Compressor::Gzip(ref gzip) => gzip.config(),
         }
     }
+
+    pub fn compress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        match *self {
+            #[cfg(feature = "gzip")]
+            Compressor::Gzip(ref gzip) => gzip.compress(src, dst),
+        }
+    }
+
+    pub fn decompress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        match *self {
+            #[cfg(feature = "gzip")]
+            Compressor::Gzip(ref gzip) => gzip.decompress(src, dst),
+        }
+    }
+
+    pub fn kind(&self) -> Kind {
+        match *self {
+            #[cfg(feature = "gzip")]
+            Compressor::Gzip(_) => Kind::ZLib,
+        }
+    }
 }
 
 impl fmt::Display for Kind {

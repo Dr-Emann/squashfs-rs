@@ -4,6 +4,9 @@ use sloggers::terminal::{Destination, TerminalLoggerBuilder};
 use sloggers::types::{Format, Severity};
 use sloggers::Build;
 
+use std::env;
+use std::path::Path;
+
 fn main() {
     std::process::exit(real_main());
 }
@@ -15,7 +18,12 @@ fn real_main() -> i32 {
     builder.format(Format::Full);
     let logger = builder.build().unwrap();
 
-    let _archive = match Archive::open_with_logger("tmp.squashfs", logger.clone()) {
+    let file_name = env::args_os().nth(1);
+    let file_name = file_name
+        .as_ref()
+        .map_or_else(|| Path::new("tmp.squashfs"), Path::new);
+
+    let _archive = match Archive::open_with_logger(file_name, logger.clone()) {
         Ok(archive) => archive,
         Err(e) => {
             slog::crit!(logger, "{}", e);
