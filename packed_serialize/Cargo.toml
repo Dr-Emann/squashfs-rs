@@ -13,7 +13,7 @@ derive = ["packed_serialize_derive"]
 
 [dependencies]
 packed_serialize_derive = { path = "../packed_serialize_derive", optional=true }
-generic-array = "0.13.0"
+generic-array = "0.14"
 
 [dev-dependencies]
 packed_serialize_derive = { path = "../packed_serialize_derive" }
