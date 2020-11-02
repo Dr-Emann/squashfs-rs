@@ -73,7 +73,9 @@ impl<R: ReadAt> Archive<R> {
         if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
             let mut options = [0; repr::metablock::SIZE];
             let size = read_metablock(&mut positioned, None, &mut options, false, &logger)?;
-            compressor.configure(&options[..size]);
+            compressor
+                .configure(&options[..size])
+                .context(MetablockIo)?;
         }
         ensure!(
             !flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS),
@@ -156,7 +158,6 @@ fn read_metablock<R: io::Read>(
         let mut intermediate = [0; repr::metablock::SIZE];
         // Safe to slice because of above ensure!
         reader.read_exact(&mut intermediate[..size])?;
-        // Assume None is only passed for compressor options
         let size = compressor.decompress(&intermediate[..size], dst)?;
         if exact {
             ensure!(
