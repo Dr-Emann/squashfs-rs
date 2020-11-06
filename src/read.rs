@@ -5,8 +5,6 @@ use crate::shared_position_file::Positioned;
 use packed_serialize;
 use positioned_io::{RandomAccessFile, ReadAt};
 use slog::{Drain, Logger};
-use snafu::OptionExt;
-use snafu::{ensure, ResultExt};
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -29,7 +27,7 @@ fn default_logger() -> Logger {
 }
 
 impl Archive<RandomAccessFile> {
-    pub fn open<P: AsRef<Path>>(p: P) -> Result<Self, Error> {
+    pub fn open<P: AsRef<Path>>(p: P) -> Result<Self> {
         Archive::open_with_logger(p, default_logger())
     }
 
@@ -40,7 +38,7 @@ impl Archive<RandomAccessFile> {
     fn _open_with_logger(path: &Path, logger: Logger) -> Result<Self> {
         let path_str = path.display().to_string();
         let logger = logger.new(slog::o!("file" => path_str));
-        let file = RandomAccessFile::open(path).context(UnableToOpen { path })?;
+        let file = RandomAccessFile::open(path)?;
         Self::with_logger(file, logger)
     }
 }
@@ -53,8 +51,7 @@ impl<R: ReadAt> Archive<R> {
     pub fn with_logger(mut reader: R, logger: Logger) -> Result<Self> {
         let mut positioned = Positioned::new(&mut reader);
 
-        let superblock: repr::superblock::Superblock =
-            packed_serialize::read(&mut positioned).context(SuperblockIo)?;
+        let superblock: repr::superblock::Superblock = packed_serialize::read(&mut positioned)?;
         log_superblock(&logger, &superblock);
 
         let mut compressor = validate_superblock(&superblock)?;
@@ -62,27 +59,25 @@ impl<R: ReadAt> Archive<R> {
         let flags = match repr::superblock::Flags::from_bits(superblock.flags) {
             Some(flags) => flags,
             None => {
-                return UnsupportedOption {
-                    err: format!("Unknown superblock flags in {:x}", superblock.flags),
-                }
-                .fail()
-                .map_err(Into::into);
+                return Err(SuperblockError::UnsupportedOption(format!(
+                    "Unknown superblock flags in {:x}",
+                    superblock.flags
+                ))
+                .into());
             }
         };
 
         if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
             let mut options = [0; repr::metablock::SIZE];
             let size = read_metablock(&mut positioned, None, &mut options, false, &logger)?;
-            compressor
-                .configure(&options[..size])
-                .context(MetablockIo)?;
+            compressor.configure(&options[..size])?;
         }
-        ensure!(
-            !flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS),
-            UnsupportedOption {
-                err: "Compressor options are not currently supported"
-            }
-        );
+        if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
+            return Err(SuperblockError::UnsupportedOption(
+                "Compressor options are not currently supported".into(),
+            )
+            .into());
+        }
         slog::info!(logger, "Loaded compressor {:?}", compressor.config(); "compression_kind" => %compressor.kind());
 
         Ok(Self {
@@ -99,41 +94,37 @@ impl<R: ReadAt> Archive<R> {
 fn validate_superblock(
     superblock: &repr::superblock::Superblock,
 ) -> Result<Compressor, SuperblockError> {
-    ensure!(
-        superblock.magic == repr::superblock::MAGIC,
-        BadMagic {
-            magic: superblock.magic
-        }
-    );
-    ensure!(
-        superblock.version_major == repr::superblock::VERSION_MAJOR
-            && superblock.version_minor == repr::superblock::VERSION_MINOR,
-        BadVersion {
+    if superblock.magic != repr::superblock::MAGIC {
+        return Err(SuperblockError::BadMagic {
+            magic: superblock.magic,
+        });
+    }
+    if superblock.version_major != repr::superblock::VERSION_MAJOR
+        || superblock.version_minor != repr::superblock::VERSION_MINOR
+    {
+        return Err(SuperblockError::BadVersion {
             major: superblock.version_major,
             minor: superblock.version_minor,
-        }
-    );
-    ensure!(
-        superblock.block_size == 1 << superblock.block_log,
-        CorruptBlockSizes {
+        });
+    }
+    if superblock.block_size != 1 << superblock.block_log {
+        return Err(SuperblockError::CorruptBlockSizes {
             block_log: superblock.block_log,
             block_size: superblock.block_size,
-        }
-    );
+        });
+    }
 
     let compression_kind = compression::Kind::from_id(superblock.compression_id);
-    ensure!(
-        compression_kind != compression::Kind::Unknown,
-        UnknownCompression {
-            compression_id: superblock.compression_id,
-        }
-    );
-    ensure!(
-        compression_kind.supported(),
-        DisabledCompression {
-            compression_kind: compression_kind,
-        }
-    );
+    if compression_kind == compression::Kind::Unknown {
+        return Err(SuperblockError::UnknownCompression {
+            id: superblock.compression_id,
+        });
+    }
+    if !compression_kind.supported() {
+        return Err(SuperblockError::DisabledCompression {
+            kind: compression_kind,
+        });
+    }
     Ok(compression_kind.compressor())
 }
 
@@ -143,41 +134,36 @@ fn read_metablock<R: io::Read>(
     dst: &mut [u8],
     exact: bool,
     logger: &Logger,
-) -> Result<usize, MetablockError> {
+) -> Result<usize, Error> {
     let header: repr::metablock::Header = packed_serialize::read(&mut reader)?;
     let compressed = header.compressed();
     let size = header.size() as usize;
-    ensure!(
-        size <= repr::metablock::SIZE,
-        HugeMetablock { actual: size }
-    );
+    if size > repr::metablock::SIZE {
+        return Err(MetablockError::HugeMetablock(size).into());
+    }
 
     if compressed {
-        let compressor = compressor.context(CompressedCompressorOptions)?;
+        let compressor = compressor.ok_or_else(|| MetablockError::CompressedCompressorOptions)?;
         // TODO: Is it worth it to use uninitialized?
         let mut intermediate = [0; repr::metablock::SIZE];
         // Safe to slice because of above ensure!
         reader.read_exact(&mut intermediate[..size])?;
         let size = compressor.decompress(&intermediate[..size], dst)?;
-        if exact {
-            ensure!(
-                size == dst.len(),
-                UnexpectedMetablockSize {
-                    actual: size,
-                    expected: dst.len(),
-                }
-            );
+        if exact && size != dst.len() {
+            return Err(MetablockError::UnexpectedMetablockSize {
+                actual: size,
+                expected: dst.len(),
+            }
+            .into());
         }
         Ok(size)
     } else {
-        if exact {
-            ensure!(
-                size == dst.len(),
-                UnexpectedMetablockSize {
-                    actual: size,
-                    expected: dst.len(),
-                }
-            );
+        if exact && size != dst.len() {
+            return Err(MetablockError::UnexpectedMetablockSize {
+                actual: size,
+                expected: dst.len(),
+            }
+            .into());
         }
         reader.read_exact(&mut dst[..size])?;
         Ok(size)

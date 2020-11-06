@@ -1,120 +1,74 @@
-use snafu::{IntoError, Snafu};
 use std::io;
-use std::path::PathBuf;
+use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Debug, Snafu)]
-pub struct Error(ErrorInner);
+#[derive(Debug, ThisError)]
+#[error(transparent)]
+pub struct Error(#[from] ErrorInner);
 
-#[derive(Debug, Snafu)]
-#[snafu(visibility(pub(crate)))]
+#[derive(Debug, ThisError)]
 pub(crate) enum ErrorInner {
-    #[snafu(display("Unable to open {}: {}", path.display(), source))]
-    UnableToOpen { path: PathBuf, source: io::Error },
+    #[error("Superblock error: {0}")]
+    BadSuperblock(#[from] SuperblockError),
 
-    #[snafu(display("Superblock error: {}", source))]
-    BadSuperblock { source: SuperblockError },
+    #[error("Metablock error: {0}")]
+    Metablock(#[from] MetablockError),
 
-    #[snafu(display("Superblock error: {}", source))]
-    BadMetablock { source: MetablockError },
+    #[error(transparent)]
+    Io(#[from] io::Error),
 }
 
-#[derive(Debug, Snafu)]
-#[snafu(visibility(pub(crate)))]
+#[derive(Debug, ThisError)]
 pub(crate) enum SuperblockError {
-    #[snafu(display(
-        "Magic mismatch: expected {:#x}, got {:#x}",
-        repr::superblock::MAGIC,
-        magic
-    ))]
+    #[error("Magic mismatch: expected {:#x}, got {:#x}", repr::superblock::MAGIC, .magic)]
     BadMagic { magic: u32 },
 
-    #[snafu(display(
-        "Invalid archive version {}.{}: sqfs only supports version 4.0",
-        major,
-        minor
-    ))]
+    #[error("Invalid archive version {major}.{minor}: sqfs only supports version 4.0")]
     BadVersion { major: u16, minor: u16 },
 
-    #[snafu(display("Unknown compression type: {}", compression_id.0))]
-    UnknownCompression {
-        compression_id: repr::compression::Id,
-    },
+    #[error("Unknown compression type: {}", .id.0)]
+    UnknownCompression { id: repr::compression::Id },
 
-    #[snafu(display("sqfs built without support for {}", compression_kind))]
-    DisabledCompression {
-        compression_kind: crate::compression::Kind,
-    },
+    #[error("sqfs built without support for {kind}")]
+    DisabledCompression { kind: crate::compression::Kind },
 
-    #[snafu(display("Block size ({}) invalid", actual))]
+    #[error("Block size ({actual}) invalid")]
     OutOfRangeBlockSize { actual: u32 },
 
-    #[snafu(display("Block size mismatch ({}/{})", (1 << *block_log as u32), block_size))]
+    #[error("Block size mismatch ({}/{})", (1 << * (.block_log) as u32), .block_size)]
     CorruptBlockSizes { block_log: u16, block_size: u32 },
 
-    #[snafu(display("Unsupported option: {}", err))]
-    UnsupportedOption { err: String },
-
-    #[snafu(display("IO error: {}", source))]
-    SuperblockIo { source: io::Error },
+    #[error("Unsupported option: {0}")]
+    UnsupportedOption(String),
 }
 
-#[derive(Debug, Snafu)]
-#[snafu(visibility(pub(crate)))]
+#[derive(Debug, ThisError)]
 pub(crate) enum MetablockError {
-    #[snafu(display(
-        "Metadata block size too large {} (max {})",
-        actual,
-        ::repr::metablock::SIZE
-    ))]
-    HugeMetablock { actual: usize },
+    #[error("Metadata block size too large {0} (max {})", ::repr::metablock::SIZE)]
+    HugeMetablock(usize),
 
-    #[snafu(display("Metadata block size mismatch: expected {}, got {}", expected, actual))]
+    #[error("Metadata block size mismatch: expected {expected}, got {actual}")]
     UnexpectedMetablockSize { actual: usize, expected: usize },
 
-    #[snafu(display("Compressor options cannot require compression"))]
+    #[error("Compressor options cannot require compression")]
     CompressedCompressorOptions,
-
-    #[snafu(display("IO error: {}", source))]
-    MetablockIo {
-        source: io::Error,
-        backtrace: snafu::Backtrace,
-    },
-}
-
-impl From<SuperblockError> for ErrorInner {
-    fn from(e: SuperblockError) -> Self {
-        BadSuperblock.into_error(e)
-    }
 }
 
 impl From<SuperblockError> for Error {
     fn from(e: SuperblockError) -> Self {
-        Self(e.into())
-    }
-}
-
-impl From<MetablockError> for ErrorInner {
-    fn from(e: MetablockError) -> Self {
-        BadMetablock.into_error(e)
+        Error(e.into())
     }
 }
 
 impl From<MetablockError> for Error {
     fn from(e: MetablockError) -> Self {
-        Self(e.into())
+        Error(e.into())
     }
 }
 
-impl From<io::Error> for SuperblockError {
+impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
-        SuperblockIo.into_error(e)
-    }
-}
-
-impl From<io::Error> for MetablockError {
-    fn from(e: io::Error) -> Self {
-        MetablockIo.into_error(e)
+        Error(e.into())
     }
 }
