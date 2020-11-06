@@ -39,6 +39,9 @@ pub(crate) enum SuperblockError {
     #[error("Block size mismatch ({}/{})", (1 << * (.block_log) as u32), .block_size)]
     CorruptBlockSizes { block_log: u16, block_size: u32 },
 
+    #[error("Invalid start of section {section} ({offset})")]
+    InvalidSectionStart { section: &'static str, offset: u64 },
+
     #[error("Unsupported option: {0}")]
     UnsupportedOption(String),
 }

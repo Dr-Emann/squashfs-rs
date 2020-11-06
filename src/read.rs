@@ -2,10 +2,13 @@ use crate::compression;
 use crate::compression::Compressor;
 use crate::errors::*;
 use crate::shared_position_file::Positioned;
-use packed_serialize;
+use packed_serialize::generic_array::GenericArray;
+use packed_serialize::PackedStruct;
 use positioned_io::{RandomAccessFile, ReadAt};
 use slog::{Drain, Logger};
 use std::io;
+use std::io::Read;
+use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -80,6 +83,15 @@ impl<R: ReadAt> Archive<R> {
         }
         slog::info!(logger, "Loaded compressor {:?}", compressor.config(); "compression_kind" => %compressor.kind());
 
+        let id_indexes = metablock_indexes::<u32, _>(
+            &mut reader,
+            superblock.id_table_start,
+            superblock.xattr_id_table_start,
+            superblock.id_count.into(),
+        );
+
+        eprintln!("yo: {:#?}", id_indexes.collect::<io::Result<Vec<_>>>());
+
         Ok(Self {
             inner: Arc::new(ArchiveInner {
                 reader,
@@ -88,6 +100,42 @@ impl<R: ReadAt> Archive<R> {
                 logger,
             }),
         })
+    }
+}
+
+struct MetablockIndexes<R> {
+    reader: R,
+    block_count: usize,
+}
+
+fn metablock_indexes<T: PackedStruct, At: ReadAt>(
+    reader: At,
+    start: u64,
+    end: u64,
+    item_count: usize,
+) -> MetablockIndexes<impl io::Read> {
+    assert!(end > start);
+    let total_size = T::size() * item_count;
+    let block_count = (total_size + (repr::metablock::SIZE - 1)) / repr::metablock::SIZE;
+    let reader = Positioned::with_position(reader, start).take(end - start);
+    MetablockIndexes {
+        reader,
+        block_count,
+    }
+}
+
+impl<R> MetablockIndexes<R> {}
+
+impl<R: io::Read> Iterator for MetablockIndexes<R> {
+    type Item = io::Result<u64>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.block_count == 0 {
+            return None;
+        }
+
+        self.block_count -= 1;
+        Some(::packed_serialize::read(&mut self.reader))
     }
 }
 
