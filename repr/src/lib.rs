@@ -77,6 +77,9 @@ bitflags! {
 }
 
 impl Mode {
+    pub const O777: Mode = Mode { bits: 0o000_777 };
+    pub const O755: Mode = Mode { bits: 0o000_755 };
+    pub const O644: Mode = Mode { bits: 0o000_644 };
     pub const PERM_MASK: Mode = Mode { bits: 0o007_777 };
     pub const TYPE_MASK: Mode = Mode { bits: 0o170_000 };
     pub const NONE: Mode = Mode { bits: 0 };

@@ -54,11 +54,42 @@ pub fn packed_struct(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
     let size = calc_size_type(&sizes);
     let from_packed_impl = gen_from_packed(&crate_ident, &fields);
+
+    let typenum_path = quote!( #crate_ident::generic_array::typenum );
+
+    let offset_functions: TokenStream = (0..sizes.len())
+        .map(|i| {
+            let field_name = fields[i]
+                .ident
+                .as_ref()
+                .map(|ident| ident.to_string())
+                .unwrap_or_else(|| i.to_string());
+
+            let const_name = quote::format_ident!("OFFSET_{}", field_name.to_uppercase());
+            let fn_name = quote::format_ident!("offset_{}", field_name);
+
+            let size = calc_size_type(&sizes[..i]);
+
+            quote!(
+                pub const #const_name: usize = <#size as #typenum_path::Unsigned>::USIZE;
+
+                #[inline]
+                pub fn #fn_name() -> usize {
+                    Self::#const_name
+                }
+            )
+        })
+        .collect();
+
     quote!(
         impl #impl_generics #crate_ident::PackedStruct for #ident #ty_generics #where_clause {
             type Size = #size;
 
             #from_packed_impl
+        }
+
+        impl #impl_generics #ident #ty_generics #where_clause {
+            #offset_functions
         }
     )
     .into()

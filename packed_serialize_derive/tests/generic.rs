@@ -26,6 +26,9 @@ fn embedded() {
         ][..]
     );
 
+    assert_eq!(Outer::OFFSET_X, 8);
+    assert_eq!(Outer::offset_inner2(), 9);
+
     let outer_2 = Outer::from_packed(&outer.to_packed());
     assert_eq!(outer, outer_2);
 }
@@ -54,11 +57,10 @@ fn large_struct() {
         fragment_table_start: u64,
         export_table_start: u64,
     }
-    use packed_serialize::generic_array::typenum::Unsigned;
-    assert_eq!(
-        <<Superblock as PackedStruct>::Size as Unsigned>::to_usize(),
-        96
-    );
+
+    assert_eq!(Superblock::SIZE, 96);
+    assert_eq!(Superblock::size(), 96);
+
     let superblock = Superblock {
         magic: 0x01020304,
         inode_count: 0x11121314,

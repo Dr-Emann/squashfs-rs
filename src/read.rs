@@ -2,13 +2,11 @@ use crate::compression;
 use crate::compression::Compressor;
 use crate::errors::*;
 use crate::shared_position_file::Positioned;
-use packed_serialize::generic_array::GenericArray;
 use packed_serialize::PackedStruct;
 use positioned_io::{RandomAccessFile, ReadAt};
-use slog::{Drain, Logger};
+use slog::Logger;
 use std::io;
 use std::io::Read;
-use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -25,13 +23,9 @@ struct ArchiveInner<R> {
     logger: Logger,
 }
 
-fn default_logger() -> Logger {
-    slog::Logger::root(slog_stdlog::StdLog.fuse(), slog::o!())
-}
-
 impl Archive<RandomAccessFile> {
     pub fn open<P: AsRef<Path>>(p: P) -> Result<Self> {
-        Archive::open_with_logger(p, default_logger())
+        Archive::open_with_logger(p, crate::default_logger())
     }
 
     pub fn open_with_logger<P: AsRef<Path>>(p: P, logger: Logger) -> Result<Self> {
@@ -48,7 +42,7 @@ impl Archive<RandomAccessFile> {
 
 impl<R: ReadAt> Archive<R> {
     pub fn new(reader: R) -> Result<Self, Error> {
-        Self::with_logger(reader, default_logger())
+        Self::with_logger(reader, crate::default_logger())
     }
 
     pub fn with_logger(mut reader: R, logger: Logger) -> Result<Self> {

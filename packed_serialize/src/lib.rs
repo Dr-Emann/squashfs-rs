@@ -82,9 +82,11 @@ pub fn write<T: PackedStruct, W: io::Write>(s: &T, mut writer: W) -> io::Result<
 pub trait PackedStruct {
     type Size: ArrayLength<u8>;
 
+    const SIZE: usize = Self::Size::USIZE;
+
     #[inline]
     fn size() -> usize {
-        Self::Size::to_usize()
+        Self::SIZE
     }
 
     fn to_packed(&self) -> GenericArray<u8, Self::Size> {

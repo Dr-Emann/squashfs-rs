@@ -25,7 +25,7 @@ pub struct Superblock {
     /// The number of seconds (not counting leap seconds) since 00:00, Jan 1 1970 UTC when the
     /// archive was created (or last appended to). This is *unsigned*, so it expires in the
     /// year 2106 (as opposed to 2038).
-    pub modification_time: i32,
+    pub modification_time: u32,
     /// The size of a data block in bytes. Must be a power of two between 4096 and 1048576 (1 MiB)
     pub block_size: u32,
     /// The number of entries in the fragment table
