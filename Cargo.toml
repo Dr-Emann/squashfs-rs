@@ -32,6 +32,6 @@ thread_local = "1.0"
 flate2 = { version = "1.0", optional = true }
 
 [dev-dependencies]
-sloggers = "0.3.4"
+sloggers = "1.0"
 
 [workspace]
