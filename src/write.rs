@@ -2,19 +2,21 @@ use chrono::{DateTime, Utc};
 use packed_serialize::PackedStruct;
 use positioned_io::RandomAccessFile;
 use std::fs;
+use std::io::prelude::*;
 use std::path::Path;
 use std::{cmp, fmt, mem, ptr};
 
 use bstr::BString;
 
 use crate::config::FragmentMode;
-use crate::shared_position_file::SharedWriteAt;
+use crate::shared_position_file::{Positioned, SharedWriteAt};
 
 use crate::compression;
 use crate::errors::Result;
 use crate::Mode;
 use slog::Logger;
 use std::collections::{BTreeMap, BTreeSet};
+use std::convert::TryInto;
 use std::mem::ManuallyDrop;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
@@ -43,6 +45,17 @@ struct Item {
     data: Data,
 }
 
+impl Item {
+    pub(crate) fn kind(&self) -> repr::inode::Kind {
+        use repr::inode::Kind;
+
+        match self.data {
+            Data::Directory { .. } => Kind::BASIC_DIR,
+            _ => unimplemented!(),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct ItemRef(usize);
 
@@ -62,24 +75,24 @@ enum Data {
 struct BaseData {}
 
 #[derive(Debug)]
-pub struct DirBuilder<'a> {
-    archive: &'a mut Archive,
+pub struct DirBuilder {
     uid: repr::uid_gid::Id,
     gid: repr::uid_gid::Id,
     mode: repr::Mode,
     mtime: DateTime<Utc>,
     entries: BTreeMap<BString, ItemRef>,
+    logger: Logger,
 }
 
-impl<'a> DirBuilder<'a> {
-    fn new(archive: &'a mut Archive) -> Self {
+impl DirBuilder {
+    fn new(logger: Logger) -> Self {
         DirBuilder {
-            archive,
             uid: repr::uid_gid::Id(0),
             gid: repr::uid_gid::Id(0),
             mode: MODE_DEFAULT_DIRECTORY,
             mtime: Utc::now(),
             entries: BTreeMap::new(),
+            logger,
         }
     }
 
@@ -112,29 +125,26 @@ impl<'a> DirBuilder<'a> {
         self.entries.insert(name, item);
     }
 
-    pub fn build(self) -> ItemRef {
-        let item_ref = ItemRef(self.archive.items.len());
-        let mut drop_self = ManuallyDrop::new(self);
+    pub fn build(self, archive: &mut Archive) -> ItemRef {
         // This is safe because self will not be dropped
-        let entries = unsafe { ptr::read(&drop_self.entries) };
+        let entries = unsafe { ptr::read(&self.entries) };
         let item = Item {
-            uid: drop_self.uid,
-            gid: drop_self.gid,
-            mode: drop_self.mode,
-            mtime: drop_self.mtime,
+            uid: self.uid,
+            gid: self.gid,
+            mode: self.mode,
+            mtime: self.mtime,
             data: Data::Directory { entries },
         };
+        mem::forget(self);
 
-        drop_self.archive.items.push(item);
-        mem::forget(drop_self);
-        item_ref
+        archive.add_item(item)
     }
 }
 
-impl Drop for DirBuilder<'_> {
+impl Drop for DirBuilder {
     fn drop(&mut self) {
         slog::warn!(
-            self.archive.logger,
+            self.logger,
             "Leaking directory builder containing {:?}",
             self.entries.keys().collect::<Vec<_>>()
         );
@@ -150,8 +160,8 @@ impl Archive {
         ArchiveBuilder::new().build(writer)
     }
 
-    pub fn create_dir(&mut self) -> DirBuilder<'_> {
-        DirBuilder::new(self)
+    pub fn create_dir(&mut self) -> DirBuilder {
+        DirBuilder::new(self.logger.clone())
     }
 
     fn get(&self, item_ref: ItemRef) -> &Item {
@@ -162,12 +172,70 @@ impl Archive {
         &mut self.items[item_ref.0]
     }
 
+    fn add_item(&mut self, item: Item) -> ItemRef {
+        self.uid_gid.insert(item.uid);
+        self.uid_gid.insert(item.gid);
+
+        let item_ref = ItemRef(self.items.len());
+        self.items.push(item);
+        item_ref
+    }
+
     pub fn set_root(&mut self, item_ref: ItemRef) {
         assert!(matches!(self.get(item_ref).data, Data::Directory {..}));
         self.root = item_ref;
     }
 
     pub fn flush(&mut self) -> Result<()> {
+        let all_ids: BTreeMap<repr::uid_gid::Id, repr::uid_gid::Idx> = self
+            .uid_gid
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(i, id)| (id, repr::uid_gid::Idx(i as u16)))
+            .collect();
+        let mut superblock = repr::superblock::Superblock {
+            magic: repr::superblock::MAGIC,
+            inode_count: self.items.len().try_into().expect("too many items"),
+            modification_time: date_time_to_mtime(self.mtime, &self.logger),
+            block_size: self.block_size,
+            fragment_entry_count: 0, // TODO
+            compression_id: repr::compression::Id(self.compression.kind().id()),
+            block_log: self.block_size.trailing_zeros() as _,
+            flags: self.flags,
+            id_count: self.uid_gid.len().try_into().expect("too many ids"),
+            version_major: repr::superblock::VERSION_MAJOR,
+            version_minor: repr::superblock::VERSION_MINOR,
+            root_inode_ref: repr::inode::Ref(0), // TODO
+            bytes_used: 0,
+            id_table_start: u64::MAX,
+            xattr_id_table_start: u64::MAX,
+            inode_table_start: u64::MAX,
+            directory_table_start: u64::MAX,
+            fragment_table_start: u64::MAX,
+            export_table_start: u64::MAX,
+        };
+        let mut writer = Positioned::with_position(
+            &*self.file,
+            repr::superblock::Superblock::SIZE.try_into().unwrap(),
+        );
+        // TODO: data blocks? compression_options
+        superblock.inode_table_start = repr::superblock::Superblock::SIZE.try_into().unwrap();
+        let mut inode_table = Vec::new();
+        for (i, item) in self.items.drain(..).enumerate() {
+            let inode_kind = item.kind();
+            let header = repr::inode::Header {
+                inode_type: inode_kind,
+                permissions: item.mode,
+                uid_idx: *all_ids.get(&item.uid).unwrap(),
+                gid_idx: *all_ids.get(&item.gid).unwrap(),
+                modified_time: date_time_to_mtime(item.mtime, &self.logger),
+                inode_number: repr::inode::Idx(i as _),
+            };
+            packed_serialize::write(&header, &mut inode_table)?;
+        }
+
+        self.file.write_all_at(&superblock.to_packed(), 0)?;
         unimplemented!();
     }
 }
@@ -294,5 +362,18 @@ impl ArchiveBuilder {
 
         let file = RandomAccessFile::try_new(fs::File::create(path)?)?;
         Ok(self.build(Box::new(file)))
+    }
+}
+
+fn date_time_to_mtime(date_time: DateTime<Utc>, logger: &Logger) -> u32 {
+    let mtime = date_time.timestamp();
+    if mtime > u32::MAX.into() {
+        slog::warn!(logger, "Modification time is out of range for squashfs"; "date" => %date_time);
+        u32::MAX
+    } else if mtime < u32::MIN.into() {
+        slog::warn!(logger, "Modification time is out of range for squashfs"; "date" => %date_time);
+        u32::MIN
+    } else {
+        mtime as u32
     }
 }

@@ -22,7 +22,7 @@ impl SharedWriteAt for RandomAccessFile {
     }
 }
 
-impl<W: SharedWriteAt> SharedWriteAt for &W {
+impl<W: SharedWriteAt + ?Sized> SharedWriteAt for &W {
     fn write_at(&self, buf: &[u8], pos: u64) -> io::Result<usize> {
         SharedWriteAt::write_at(*self, buf, pos)
     }
@@ -36,7 +36,7 @@ impl<W: SharedWriteAt> SharedWriteAt for &W {
     }
 }
 
-impl<W: WriteAt + Sync + Send> SharedWriteAt for Mutex<W> {
+impl<W: WriteAt + Sync + Send + ?Sized> SharedWriteAt for Mutex<W> {
     fn write_at(&self, buf: &[u8], pos: u64) -> io::Result<usize> {
         self.lock().write_at(pos, buf)
     }

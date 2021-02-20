@@ -12,7 +12,7 @@ fn main() {
     root.set_mode(sqfs::Mode::from_bits(0o755).unwrap());
     root.set_uid(1000).set_gid(1000);
     root.set_modified_time(DateTime::from(std::time::UNIX_EPOCH));
-    let item = root.build();
+    let item = root.build(&mut archive);
     archive.set_root(item);
     println!("{:#?}", archive);
     archive.flush().expect("Unable to flush");
