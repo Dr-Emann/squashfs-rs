@@ -2,21 +2,20 @@ use chrono::{DateTime, Utc};
 use packed_serialize::PackedStruct;
 use positioned_io::RandomAccessFile;
 use std::fs;
-use std::io;
 use std::path::Path;
-use std::{cmp, fmt};
+use std::{cmp, fmt, mem, ptr};
 
-use bstr::{BStr, BString};
+use bstr::BString;
 
 use crate::config::FragmentMode;
 use crate::shared_position_file::SharedWriteAt;
 
 use crate::compression::Kind;
-use crate::errors::{Error, Result};
+use crate::errors::Result;
 use crate::Mode;
 use slog::Logger;
-use std::collections::BTreeMap;
-use std::convert::TryInto;
+use std::collections::{BTreeMap, BTreeSet};
+use std::mem::ManuallyDrop;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
 const MODE_DEFAULT_FILE: Mode = Mode::O644;
@@ -24,109 +23,118 @@ const MODE_DEFAULT_FILE: Mode = Mode::O644;
 pub struct Archive {
     file: Box<dyn SharedWriteAt>,
     superblock: repr::superblock::Superblock,
+    items: Vec<Item>,
+    root: ItemRef,
+    uid_gid: BTreeSet<repr::uid_gid::Id>,
     logger: Logger,
 }
 
-struct Entry {
-    name: BString,
-    item: Item,
+#[derive(Debug, Clone)]
+struct Item {
+    uid: repr::uid_gid::Id,
+    gid: repr::uid_gid::Id,
+    mode: repr::Mode,
+    mtime: DateTime<Utc>,
+
+    // TODO: xattrs
+    data: Data,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct ItemRef(usize);
+
+#[derive(Debug, Clone)]
+enum Data {
+    Symlink { target: BString },
+    Directory { entries: BTreeMap<BString, ItemRef> },
+    BlockDev(repr::inode::DeviceNumber),
+    CharDev(repr::inode::DeviceNumber),
+    Fifo,
+    Socket,
+    // TODO
+    File {},
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct BaseData {
-    uid: u32,
-    gid: u32,
-    mode: repr::Mode,
-    mtime: DateTime<Utc>,
-    inode_number: repr::inode::Idx,
-}
-
-#[derive(Debug)]
-pub struct Item {
-    inode_ref: repr::inode::Ref,
-    kind: repr::inode::Kind,
-    logger: Logger,
-    attached: bool,
-}
-
-impl Drop for Item {
-    fn drop(&mut self) {
-        if !self.attached {
-            slog::warn!(self.logger, "Dropping unattached item");
-        }
-    }
-}
+struct BaseData {}
 
 #[derive(Debug)]
 pub struct DirBuilder<'a> {
     archive: &'a mut Archive,
-    base: BaseData,
-    entries: BTreeMap<BString, Item>,
-    built: bool,
+    uid: repr::uid_gid::Id,
+    gid: repr::uid_gid::Id,
+    mode: repr::Mode,
+    mtime: DateTime<Utc>,
+    entries: BTreeMap<BString, ItemRef>,
 }
 
 impl<'a> DirBuilder<'a> {
     fn new(archive: &'a mut Archive) -> Self {
         DirBuilder {
             archive,
-            base: BaseData {
-                uid: 0,
-                gid: 0,
-                mode: MODE_DEFAULT_DIRECTORY,
-                mtime: Utc::now(),
-                inode_number: repr::inode::Idx(0),
-            },
+            uid: repr::uid_gid::Id(0),
+            gid: repr::uid_gid::Id(0),
+            mode: MODE_DEFAULT_DIRECTORY,
+            mtime: Utc::now(),
             entries: BTreeMap::new(),
-            built: false,
         }
     }
 
     pub fn set_uid(&mut self, id: u32) -> &mut Self {
-        self.base.uid = id;
+        self.uid = repr::uid_gid::Id(id);
         self
     }
 
     pub fn set_gid(&mut self, id: u32) -> &mut Self {
-        self.base.gid = id;
+        self.gid = repr::uid_gid::Id(id);
         self
     }
 
     pub fn set_mode(&mut self, mode: crate::Mode) -> &mut Self {
-        self.base.mode = mode;
+        self.mode = mode;
         self
     }
 
     pub fn set_modified_time(&mut self, date_time: DateTime<Utc>) -> &mut Self {
-        self.base.mtime = date_time;
+        self.mtime = date_time;
         self
     }
 
-    pub fn add_item<S: Into<BString>, I: Into<Item>>(&mut self, name: S, item: I) -> &mut Self {
-        self._add_item(name.into(), item.into());
+    pub fn add_item<S: Into<BString>>(&mut self, name: S, item: ItemRef) -> &mut Self {
+        self._add_item(name.into(), item);
         self
     }
 
-    fn _add_item(&mut self, name: BString, item: Item) {
+    fn _add_item(&mut self, name: BString, item: ItemRef) {
         self.entries.insert(name, item);
     }
 
-    pub fn build(mut self) -> Item {
-        let idx = self.archive.next_inode_idx();
-        self.base.inode_number = idx;
-        self.built = true;
-        unimplemented!()
+    pub fn build(self) -> ItemRef {
+        let item_ref = ItemRef(self.archive.items.len());
+        let mut drop_self = ManuallyDrop::new(self);
+        // This is safe because self will not be dropped
+        let entries = unsafe { ptr::read(&drop_self.entries) };
+        let item = Item {
+            uid: drop_self.uid,
+            gid: drop_self.gid,
+            mode: drop_self.mode,
+            mtime: drop_self.mtime,
+            data: Data::Directory { entries },
+        };
+
+        drop_self.archive.items.push(item);
+        mem::forget(drop_self);
+        item_ref
     }
 }
 
 impl Drop for DirBuilder<'_> {
     fn drop(&mut self) {
-        if !self.built {
-            slog::warn!(
-                self.archive.logger,
-                "Leaking directory builder containing {:?}",
-                self.entries
-            );
-        }
+        slog::warn!(
+            self.archive.logger,
+            "Leaking directory builder containing {:?}",
+            self.entries.keys().collect::<Vec<_>>()
+        );
     }
 }
 
@@ -140,7 +148,7 @@ impl Archive {
     }
 
     pub fn create_dir(&mut self) -> DirBuilder<'_> {
-        unimplemented!()
+        DirBuilder::new(self)
     }
 
     fn next_inode_idx(&mut self) -> repr::inode::Idx {
@@ -149,9 +157,17 @@ impl Archive {
         idx
     }
 
-    pub fn set_root(&mut self, item: Item) {
-        assert_eq!(item.kind, repr::inode::Kind::BASIC_DIR);
-        self.superblock.root_inode_ref = item.inode_ref;
+    fn get(&self, item_ref: ItemRef) -> &Item {
+        &self.items[item_ref.0]
+    }
+
+    fn get_mut(&mut self, item_ref: ItemRef) -> &mut Item {
+        &mut self.items[item_ref.0]
+    }
+
+    pub fn set_root(&mut self, item_ref: ItemRef) {
+        assert!(matches!(self.get(item_ref).data, Data::Directory {..}));
+        self.root = item_ref;
     }
 
     pub fn flush(&mut self) -> Result<()> {
@@ -169,7 +185,12 @@ impl Drop for Archive {
 
 impl fmt::Debug for Archive {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("Archive").finish()
+        f.debug_struct("Archive")
+            .field("superblock", &self.superblock)
+            .field("items", &self.items)
+            .field("root", &self.root)
+            .field("uid_gid", &self.uid_gid)
+            .finish()
     }
 }
 
@@ -274,8 +295,11 @@ impl ArchiveBuilder {
         };
         Archive {
             file: writer,
+            root: ItemRef(usize::MAX),
             superblock,
             logger,
+            items: Vec::new(),
+            uid_gid: BTreeSet::new(),
         }
     }
 

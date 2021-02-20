@@ -20,7 +20,7 @@ impl Ref {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, PackedStruct)]
 pub struct Idx(pub u32);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
