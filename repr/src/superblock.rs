@@ -36,7 +36,7 @@ pub struct Superblock {
     /// corrupt
     pub block_log: u16,
     /// See [`Flags`](struct.Flags.html)
-    pub flags: u16,
+    pub flags: Flags,
     /// The number of entries in the id lookup table
     pub id_count: u16,
     /// The major version of the squashfs file format. Should always equal
@@ -65,7 +65,7 @@ pub struct Superblock {
 }
 
 bitflags! {
-    #[derive(PackedStruct)]
+    #[derive(Default, PackedStruct)]
     pub struct Flags: u16 {
         /// Inodes are stored uncompressed. For backward compatibility reasons, UID/GIDs are also stored uncompressed.
         const UNCOMPRESSED_INODES     = 1;

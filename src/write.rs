@@ -10,7 +10,7 @@ use bstr::BString;
 use crate::config::FragmentMode;
 use crate::shared_position_file::SharedWriteAt;
 
-use crate::compression::Kind;
+use crate::compression;
 use crate::errors::Result;
 use crate::Mode;
 use slog::Logger;
@@ -22,7 +22,10 @@ const MODE_DEFAULT_FILE: Mode = Mode::O644;
 
 pub struct Archive {
     file: Box<dyn SharedWriteAt>,
-    superblock: repr::superblock::Superblock,
+    mtime: DateTime<Utc>,
+    block_size: u32,
+    compression: compression::Compressor,
+    flags: repr::superblock::Flags,
     items: Vec<Item>,
     root: ItemRef,
     uid_gid: BTreeSet<repr::uid_gid::Id>,
@@ -151,12 +154,6 @@ impl Archive {
         DirBuilder::new(self)
     }
 
-    fn next_inode_idx(&mut self) -> repr::inode::Idx {
-        let idx = repr::inode::Idx(self.superblock.inode_count);
-        self.superblock.inode_count += 1;
-        idx
-    }
-
     fn get(&self, item_ref: ItemRef) -> &Item {
         &self.items[item_ref.0]
     }
@@ -171,9 +168,7 @@ impl Archive {
     }
 
     pub fn flush(&mut self) -> Result<()> {
-        self.file.write_all_at(&self.superblock.to_packed(), 0)?;
-
-        Ok(())
+        unimplemented!();
     }
 }
 
@@ -186,10 +181,13 @@ impl Drop for Archive {
 impl fmt::Debug for Archive {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Archive")
-            .field("superblock", &self.superblock)
             .field("items", &self.items)
             .field("root", &self.root)
             .field("uid_gid", &self.uid_gid)
+            .field("mtime", &self.mtime)
+            .field("block_size", &self.block_size)
+            .field("compression", &self.compression)
+            .field("flags", &self.flags)
             .finish()
     }
 }
@@ -206,7 +204,7 @@ pub struct ArchiveBuilder {
     pub find_duplicates: bool,
     pub exportable: bool,
     pub fragment_mode: FragmentMode,
-    pub compressor: Kind,
+    pub compressor: compression::Kind,
 
     modified_time: DateTime<Utc>,
     logger: Option<Logger>,
@@ -225,7 +223,7 @@ impl Default for ArchiveBuilder {
             find_duplicates: true,
             exportable: true,
             fragment_mode: FragmentMode::default(),
-            compressor: Kind::default(),
+            compressor: compression::Kind::default(),
             modified_time: Utc::now(),
             logger: None,
         }
@@ -272,34 +270,16 @@ impl ArchiveBuilder {
         }
         let modification_time = modification_time as u32;
 
-        let superblock = repr::superblock::Superblock {
-            magic: repr::superblock::MAGIC,
-            inode_count: 0,
-            modification_time,
-            block_size: repr::BLOCK_SIZE_DEFAULT,
-            fragment_entry_count: 0,
-            compression_id: repr::compression::Id::GZIP,
-            block_log: repr::BLOCK_LOG_DEFAULT,
-            flags: 0,
-            id_count: 0,
-            version_major: repr::superblock::VERSION_MAJOR,
-            version_minor: repr::superblock::VERSION_MINOR,
-            root_inode_ref: repr::inode::Ref(0),
-            bytes_used: repr::superblock::Superblock::SIZE as u64,
-            id_table_start: repr::superblock::Superblock::SIZE as u64,
-            xattr_id_table_start: !0,
-            inode_table_start: !0,
-            directory_table_start: !0,
-            fragment_table_start: !0,
-            export_table_start: !0,
-        };
         Archive {
             file: writer,
+            mtime: self.modified_time,
+            block_size: self.block_size,
+            compression: self.compressor.compressor(),
             root: ItemRef(usize::MAX),
-            superblock,
-            logger,
             items: Vec::new(),
             uid_gid: BTreeSet::new(),
+            flags: repr::superblock::Flags::default(),
+            logger,
         }
     }
 

@@ -52,24 +52,27 @@ impl<R: ReadAt> Archive<R> {
         log_superblock(&logger, &superblock);
 
         let mut compressor = validate_superblock(&superblock)?;
+        // Check for unknown bits
+        if !(superblock.flags & repr::superblock::Flags::all()).is_empty() {
+            return Err(SuperblockError::UnsupportedOption(format!(
+                "Unknown superblock flags in {:x}",
+                superblock.flags
+            ))
+            .into());
+        }
         // TODO: Load compression options
-        let flags = match repr::superblock::Flags::from_bits(superblock.flags) {
-            Some(flags) => flags,
-            None => {
-                return Err(SuperblockError::UnsupportedOption(format!(
-                    "Unknown superblock flags in {:x}",
-                    superblock.flags
-                ))
-                .into());
-            }
-        };
-
-        if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
+        if superblock
+            .flags
+            .contains(repr::superblock::Flags::COMPRESSOR_OPTIONS)
+        {
             let mut options = [0; repr::metablock::SIZE];
             let size = read_metablock(&mut positioned, None, &mut options, false, &logger)?;
             compressor.configure(&options[..size])?;
         }
-        if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
+        if superblock
+            .flags
+            .contains(repr::superblock::Flags::COMPRESSOR_OPTIONS)
+        {
             return Err(SuperblockError::UnsupportedOption(
                 "Compressor options are not currently supported".into(),
             )
@@ -221,7 +224,7 @@ fn log_superblock(logger: &Logger, superblock: &repr::superblock::Superblock) {
         "fragment_entry_count" => superblock.fragment_entry_count,
         "compression_id" => ?superblock.compression_id,
         "block_log" => superblock.block_log,
-        "flags" => superblock.flags,
+        "flags" => ?superblock.flags,
         "id_count" => superblock.id_count,
         "version_major" => superblock.version_major,
         "version_minor" => superblock.version_minor,
