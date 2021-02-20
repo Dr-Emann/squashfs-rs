@@ -28,7 +28,30 @@ pub struct Entry {
     /// describe the size of the fragment block on disk. Because the max value of block_size is
     /// 1 MiB (`1<<20`), and the size of a fragment block should be less than `block_size`, the
     /// uncompressed bit will never be set by the size.
-    pub size: u32,
+    pub size: Size,
     /// This field is unused
     pub _unused: u32,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+pub struct Size(pub u32);
+
+impl Size {
+    pub const UNCOMPRESSED_FLAG: u32 = 1 << 24;
+
+    pub fn new(mut size: u32, uncompressed: bool) -> Self {
+        assert!(size <= (1 << 20));
+        if uncompressed {
+            size |= Self::UNCOMPRESSED_FLAG;
+        }
+        Self(size)
+    }
+
+    pub fn size(self) -> u32 {
+        self.0 & !Self::UNCOMPRESSED_FLAG
+    }
+
+    pub fn uncompressed(self) -> bool {
+        self.0 & Self::UNCOMPRESSED_FLAG != 0
+    }
 }

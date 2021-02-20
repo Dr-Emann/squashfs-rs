@@ -171,7 +171,7 @@ fn field_subarrays<'a>(
 ) -> Vec<FieldArrayInfo<'a>> {
     let mut field_sizes = Vec::with_capacity(fields.len());
     let mut field_number = 0;
-    fields.into_iter().map(|field| {
+    fields.iter().map(|field| {
         let sum_previous = calc_size_type(&field_sizes);
         let field_ty = &field.ty;
         field_sizes.push(&field.ty);

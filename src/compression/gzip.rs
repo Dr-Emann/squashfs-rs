@@ -13,7 +13,7 @@ struct State {
 #[derive(Debug, Default)]
 pub struct Gzip {
     config: Config,
-    state: thread_local::CachedThreadLocal<RefCell<State>>,
+    state: thread_local::ThreadLocal<RefCell<State>>,
 }
 
 impl Gzip {
