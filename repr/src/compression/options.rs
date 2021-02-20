@@ -16,7 +16,7 @@ pub struct Gzip {
     ///
     /// See `GzipStrategies`.
     /// If no flags are set, the default strategy is implicitly used.
-    pub strategies: u16,
+    pub strategies: GzipStrategies,
 }
 
 impl Default for Gzip {
