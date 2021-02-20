@@ -7,7 +7,7 @@ use packed_serialize::PackedStruct;
 
 use crate::{compression, inode};
 
-/// The magic constant which marks a squashfs archive
+/// The magic constant which marks a squashfs archive ('hsqs' in ascii)
 pub const MAGIC: u32 = 0x7371_7368;
 
 /// The supported major version of the squashfs archive metadata
@@ -17,7 +17,7 @@ pub const VERSION_MINOR: u16 = 0;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
 pub struct Superblock {
-    /// Must match the value of [`MAGIC`](constant.MAGIC.html) (`0x73717368`) to be considered a
+    /// Must match the value of [`MAGIC`](constant.MAGIC.html) (`0x73717368`/'hsqs') to be considered a
     /// squashfs archive
     pub magic: u32,
     /// The number of inodes stored in the inode table
