@@ -113,7 +113,7 @@ pub struct ExtendedDir {
     pub block_idx: u32,
     /// The inode_number of the parent of this directory. If this is the root directory, this will be 1
     pub parent_inode_number: Idx,
-    /// One less than the number of directory index entries following the inode structure
+    /// The number of directory index entries following the inode structure
     pub index_count: u16,
     /// The (uncompressed) offset within the block in the Directory Table where the directory entry
     /// information starts
