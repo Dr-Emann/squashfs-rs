@@ -182,7 +182,7 @@ impl Archive {
     }
 
     pub fn set_root(&mut self, item_ref: ItemRef) {
-        assert!(matches!(self.get(item_ref).data, Data::Directory {..}));
+        assert!(matches!(self.get(item_ref).data, Data::Directory { .. }));
         self.root = item_ref;
     }
 
@@ -331,12 +331,7 @@ impl ArchiveBuilder {
 
         let logger = self.logger.unwrap_or_else(crate::default_logger);
 
-        let mut modification_time = self.modified_time.timestamp();
-        if modification_time < 0 || modification_time > u32::max_value().into() {
-            slog::warn!(logger, "modification time is unrepresentable"; "time" => %self.modified_time);
-            modification_time = cmp::max(cmp::min(modification_time, u32::max_value().into()), 0);
-        }
-        let modification_time = modification_time as u32;
+        let modification_time = date_time_to_mtime(self.modified_time, &logger);
 
         Archive {
             file: writer,
