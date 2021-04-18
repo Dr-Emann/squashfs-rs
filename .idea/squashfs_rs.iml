@@ -18,6 +18,22 @@
       <sourceFolder url="file://$MODULE_DIR$/repr/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/repr/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/repr/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/bitflags-6296c1dd02b0fc4c/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/crc32fast-f62ff01182232173/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/generic-array-ef35061c08a5ed22/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/libc-893c3c45a9e6ef08/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/log-8af50532f1dd18b0/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/memchr-85f4dd8b5ab800a4/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/miniz_oxide-d9f35049598dc673/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/num-integer-73dbc790b9784b00/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/num-traits-7269e9264320c241/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/proc-macro2-b96a3c4f695f4efc/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/serde-c8c3b0c4ebfbffe6/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/serde_derive-3a8e7d95535b95e2/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/slog-54b61eba5a453c78/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/syn-683104e7066a1a34/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/typenum-6f38ea91b3560327/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/winapi-ae535f664f3d0b01/out" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/packed_serialize/target" />
       <excludeFolder url="file://$MODULE_DIR$/packed_serialize_derive/target" />
       <excludeFolder url="file://$MODULE_DIR$/repr/target" />
