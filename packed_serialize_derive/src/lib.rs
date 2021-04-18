@@ -6,22 +6,23 @@ use quote::{quote, quote_spanned};
 use syn::parse_macro_input;
 
 use proc_macro2::{Span, TokenStream};
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::ToTokens;
 use syn::spanned::Spanned;
 use syn::{DeriveInput, Field, GenericParam, Generics};
 
 fn get_crate_ident() -> TokenStream {
-    let crate_name = crate_name("packed_serialize");
-    let crate_name: &str = match &crate_name {
-        Ok(name) => &name,
-        Err(e) => {
-            eprintln!("{}", e);
-            "packed_serialize"
+    let crate_name =
+        crate_name("packed_serialize").expect("Expected to depend on packed_serialize crate");
+    match crate_name {
+        FoundCrate::Itself => {
+            quote!(::crate)
         }
-    };
-    let ident = syn::Ident::new(crate_name, Span::call_site());
-    quote!(::#ident)
+        FoundCrate::Name(crate_name) => {
+            let ident = syn::Ident::new(&crate_name, Span::call_site());
+            quote!(::#ident)
+        }
+    }
 }
 
 #[proc_macro_derive(PackedStruct)]
