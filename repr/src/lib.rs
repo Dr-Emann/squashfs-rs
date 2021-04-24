@@ -11,10 +11,12 @@
 //! * [Xattr Table](xattr/index.html)
 
 use bitflags::bitflags;
-use packed_serialize::PackedStruct;
 
 use std::fmt;
 use std::fmt::Write;
+use std::io;
+use std::mem;
+use std::mem::MaybeUninit;
 
 pub mod compression;
 pub mod directory;
@@ -34,8 +36,10 @@ pub const BLOCK_SIZE_MAX: u32 = 1 << BLOCK_LOG_MAX as u32;
 pub const BLOCK_SIZE_DEFAULT: u32 = 1 << BLOCK_LOG_DEFAULT as u32;
 
 /// The header stored before a metadata block
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct MetablockHeader(pub u16);
+unsafe impl Repr for MetablockHeader {}
 
 impl MetablockHeader {
     /// Return true if the following block is compressed
@@ -50,7 +54,7 @@ impl MetablockHeader {
 }
 
 bitflags! {
-    #[derive(Default, PackedStruct)]
+    #[derive(Default)]
     pub struct Mode: u16 {
         const OTHER_EXEC =  0o000_001;
         const OTHER_WRITE = 0o000_002;
@@ -74,6 +78,39 @@ bitflags! {
         const TYPE_SOCKET = 0o140_000;
 
     }
+}
+
+/// Trait to specify that the type is repr(C, packed)
+pub unsafe trait Repr: Sized {
+    const SIZE: usize = mem::size_of::<Self>();
+
+    #[inline]
+    fn as_bytes(&self) -> &[u8] {
+        crate::as_bytes(self)
+    }
+}
+
+pub fn read<T: Repr, R: io::Read>(mut reader: R) -> io::Result<T> {
+    let mut val: MaybeUninit<T> = MaybeUninit::uninit();
+    let slice =
+        unsafe { std::slice::from_raw_parts_mut(val.as_mut_ptr() as *mut u8, mem::size_of::<T>()) };
+    reader.read_exact(slice)?;
+    return Ok(unsafe { val.assume_init() });
+}
+
+pub fn write<T: Repr, W: io::Write>(mut writer: W, item: &T) -> io::Result<()> {
+    writer.write_all(as_bytes(item))
+}
+
+pub fn from_bytes<T: Repr>(data: &[u8]) -> Option<&T> {
+    if data.len() < mem::size_of::<T>() {
+        return None;
+    }
+    Some(unsafe { &*(data.as_ptr() as *const T) })
+}
+
+pub fn as_bytes<T: Repr>(t: &T) -> &[u8] {
+    unsafe { std::slice::from_raw_parts(t as *const T as *const u8, mem::size_of_val(t)) }
 }
 
 impl Mode {

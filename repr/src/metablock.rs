@@ -28,16 +28,16 @@
 //!
 //! [`UNCOMPRESSED_INODES`]: ../superblock/struct.Flags.html#associatedconstant.UNCOMPRESSED_INODES
 
-use packed_serialize::PackedStruct;
-
 pub const SIZE: usize = 8 * 1024;
 
 pub const COMPRESSED_FLAG: u16 = 0x8000;
 
 pub type Metablock = [u8; SIZE];
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Header(pub u16);
+unsafe impl crate::Repr for Header {}
 
 impl Header {
     pub fn compressed(self) -> bool {

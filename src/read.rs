@@ -2,7 +2,7 @@ use crate::compression;
 use crate::compression::Compressor;
 use crate::errors::*;
 use crate::shared_position_file::Positioned;
-use packed_serialize::PackedStruct;
+use byteorder::ReadBytesExt;
 use positioned_io::{RandomAccessFile, ReadAt};
 use slog::Logger;
 use std::io;
@@ -48,31 +48,26 @@ impl<R: ReadAt> Archive<R> {
     pub fn with_logger(mut reader: R, logger: Logger) -> Result<Self> {
         let mut positioned = Positioned::new(&mut reader);
 
-        let superblock: repr::superblock::Superblock = packed_serialize::read(&mut positioned)?;
+        let superblock: repr::superblock::Superblock = repr::read(&mut positioned)?;
         log_superblock(&logger, &superblock);
 
         let mut compressor = validate_superblock(&superblock)?;
+        let flags = superblock.flags;
         // Check for unknown bits
-        if !(superblock.flags & repr::superblock::Flags::all()).is_empty() {
+        if !(flags & repr::superblock::Flags::all()).is_empty() {
             return Err(SuperblockError::UnsupportedOption(format!(
                 "Unknown superblock flags in {:x}",
-                superblock.flags
+                flags
             ))
             .into());
         }
         // TODO: Load compression options
-        if superblock
-            .flags
-            .contains(repr::superblock::Flags::COMPRESSOR_OPTIONS)
-        {
+        if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
             let mut options = [0; repr::metablock::SIZE];
             let size = read_metablock(&mut positioned, None, &mut options, false, &logger)?;
             compressor.configure(&options[..size])?;
         }
-        if superblock
-            .flags
-            .contains(repr::superblock::Flags::COMPRESSOR_OPTIONS)
-        {
+        if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
             return Err(SuperblockError::UnsupportedOption(
                 "Compressor options are not currently supported".into(),
             )
@@ -80,7 +75,7 @@ impl<R: ReadAt> Archive<R> {
         }
         slog::info!(logger, "Loaded compressor {:?}", compressor.config(); "compression_kind" => %compressor.kind());
 
-        let id_indexes = metablock_indexes::<u32, _>(
+        let id_indexes = metablock_indexes::<repr::uid_gid::Id, _>(
             &mut reader,
             superblock.id_table_start,
             superblock.xattr_id_table_start,
@@ -105,14 +100,14 @@ struct MetablockIndexes<R> {
     block_count: usize,
 }
 
-fn metablock_indexes<T: PackedStruct, At: ReadAt>(
+fn metablock_indexes<T: repr::Repr, At: ReadAt>(
     reader: At,
     start: u64,
     end: u64,
     item_count: usize,
 ) -> MetablockIndexes<impl io::Read> {
     assert!(end > start);
-    let total_size = T::size() * item_count;
+    let total_size = T::SIZE * item_count;
     let block_count = (total_size + (repr::metablock::SIZE - 1)) / repr::metablock::SIZE;
     let reader = Positioned::with_position(reader, start).take(end - start);
     MetablockIndexes {
@@ -132,7 +127,8 @@ impl<R: io::Read> Iterator for MetablockIndexes<R> {
         }
 
         self.block_count -= 1;
-        Some(::packed_serialize::read(&mut self.reader))
+        let result = [0u8; std::mem::size_of::<u64>()];
+        Some(self.reader.read_u64::<byteorder::LE>())
     }
 }
 
@@ -180,7 +176,7 @@ fn read_metablock<R: io::Read>(
     exact: bool,
     logger: &Logger,
 ) -> Result<usize, Error> {
-    let header: repr::metablock::Header = packed_serialize::read(&mut reader)?;
+    let header: repr::metablock::Header = repr::read(&mut reader)?;
     let compressed = header.compressed();
     let size = header.size() as usize;
     if size > repr::metablock::SIZE {
@@ -222,9 +218,11 @@ fn log_superblock(logger: &Logger, superblock: &repr::superblock::Superblock) {
         "modification_time" => superblock.modification_time,
         "block_size" => superblock.block_size,
         "fragment_entry_count" => superblock.fragment_entry_count,
-        "compression_id" => ?superblock.compression_id,
+        // Extra braces to avoid a reference to a packed field
+        "compression_id" => ?{superblock.compression_id},
         "block_log" => superblock.block_log,
-        "flags" => ?superblock.flags,
+        // Extra braces to avoid a reference to a packed field
+        "flags" => ?{superblock.flags},
         "id_count" => superblock.id_count,
         "version_major" => superblock.version_major,
         "version_minor" => superblock.version_minor,

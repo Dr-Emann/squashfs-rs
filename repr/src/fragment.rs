@@ -15,10 +15,9 @@
 //! offsets starting at `fragment_table_start`, then read the metadata blocks at the offsets read,
 //! interpreting the data of the metadata blocks as a packed array of fragment block entries.
 
-use packed_serialize::PackedStruct;
-
 /// Fragment block entry
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Entry {
     /// The offset within the archive where the fragment block starts
     pub start: u64,
@@ -32,8 +31,10 @@ pub struct Entry {
     /// This field is unused
     pub _unused: u32,
 }
+unsafe impl crate::Repr for Entry {}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Size(pub u32);
 
 impl Size {

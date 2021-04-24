@@ -40,17 +40,20 @@ impl super::Compress for Gzip {
     type Config = Config;
 
     fn configure(&mut self, options: &[u8]) -> io::Result<()> {
-        let config: Config = packed_serialize::read(options)?;
+        let config: Config = repr::read(options)?;
         if config.compression_level < 1 || config.compression_level > 9 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid compression level ({})", config.compression_level),
+                // Extra braces to avoid format taking a reference to a packed field
+                format!("Invalid compression level ({})", {
+                    config.compression_level
+                }),
             ));
         }
         if config.window_size < 9 || config.window_size > 15 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid window size ({})", config.window_size),
+                format!("Invalid window size ({})", { config.window_size }),
             ));
         }
         self.config = config;

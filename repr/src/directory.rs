@@ -12,7 +12,6 @@
 // The entries just store an offset into the uncompressed metadata block.
 
 use crate::inode;
-use packed_serialize::PackedStruct;
 
 /// A header which precedes a list of directory entries
 ///
@@ -21,7 +20,8 @@ use packed_serialize::PackedStruct;
 ///
 ///A header must not be followed by more than 256 entries. If there are more entries,
 /// a new header is emitted.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Header {
     /// Number of entries following the header
     pub count: u32,
@@ -37,6 +37,7 @@ pub struct Header {
     /// could of course be optimized to prevent this
     pub inode_number: inode::Idx,
 }
+unsafe impl crate::Repr for Header {}
 
 /// A directory entry
 ///
@@ -49,7 +50,8 @@ pub struct Header {
 ///
 ///The file names are stored without trailing null bytes. Since a zero length name makes no sense,
 /// the name length is stored off-by-one, i.e. the value 0 cannot be encoded
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Entry {
     /// An offset into the uncompressed inode metadata block
     pub offset: u16,
@@ -62,6 +64,7 @@ pub struct Entry {
     /// One less than the size of the entry name
     pub name_size: u16,
 }
+unsafe impl crate::Repr for Entry {}
 
 /// A directory index
 ///
@@ -73,7 +76,8 @@ pub struct Entry {
 /// crosses a metadata block boundary.
 ///
 /// A directory index is followed by string name of `name_size + 1` bytes
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Index {
     /// A byte offset from the first directory header to the current header, as if the uncompressed
     /// directory metadata blocks were laid out in memory consecutively.
@@ -83,3 +87,4 @@ pub struct Index {
     /// One less than the size of the entry name
     pub name_size: u32,
 }
+unsafe impl crate::Repr for Index {}

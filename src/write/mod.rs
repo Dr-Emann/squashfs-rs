@@ -1,10 +1,8 @@
 use chrono::{DateTime, Utc};
-use packed_serialize::PackedStruct;
 use positioned_io::RandomAccessFile;
 use std::fs;
-use std::io::prelude::*;
 use std::path::Path;
-use std::{cmp, fmt, mem, ptr};
+use std::{fmt, mem, ptr};
 
 use bstr::BString;
 
@@ -14,10 +12,10 @@ use crate::shared_position_file::{Positioned, SharedWriteAt};
 use crate::compression;
 use crate::errors::Result;
 use crate::Mode;
+use repr::Repr;
 use slog::Logger;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
-use std::mem::ManuallyDrop;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
 const MODE_DEFAULT_FILE: Mode = Mode::O644;
@@ -215,7 +213,7 @@ impl Archive {
             fragment_table_start: u64::MAX,
             export_table_start: u64::MAX,
         };
-        let mut writer = Positioned::with_position(
+        let writer = Positioned::with_position(
             &*self.file,
             repr::superblock::Superblock::SIZE.try_into().unwrap(),
         );
@@ -232,10 +230,10 @@ impl Archive {
                 modified_time: date_time_to_mtime(item.mtime, &self.logger),
                 inode_number: repr::inode::Idx(i as _),
             };
-            packed_serialize::write(&header, &mut inode_table)?;
+            repr::write(&mut inode_table, &header)?;
         }
 
-        self.file.write_all_at(&superblock.to_packed(), 0)?;
+        self.file.write_all_at(&superblock.as_bytes(), 0)?;
         unimplemented!();
     }
 }

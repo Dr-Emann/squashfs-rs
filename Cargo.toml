@@ -16,7 +16,6 @@ zstd = []
 
 [dependencies]
 positioned_io = { package = "positioned-io-preview", version = "0.3.3", path = "../positioned-io" }
-packed_serialize = { path = "packed_serialize" }
 repr = { path = "repr" }
 
 bstr = "0.2"

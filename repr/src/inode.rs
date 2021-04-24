@@ -3,10 +3,11 @@
 //! Metadata (ownership, permissions, etc) for items in the archive
 
 use crate::{uid_gid, xattr};
-use packed_serialize::PackedStruct;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(C, packed)]
 pub struct Ref(pub u64);
+unsafe impl crate::Repr for Ref {}
 
 impl Ref {
     #[inline]
@@ -20,10 +21,12 @@ impl Ref {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(C, packed)]
 pub struct Idx(pub u32);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Kind(pub u16);
 
 impl Kind {
@@ -60,7 +63,8 @@ impl Kind {
     pub const MAX: Kind = Kind::EXT_SOCKET;
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Header {
     /// The type of item described by the inode which follows this header
     pub inode_type: Kind,
@@ -82,9 +86,11 @@ pub struct Header {
     /// already been visited, this inode is hardlinked
     pub inode_number: Idx,
 }
+unsafe impl crate::Repr for Header {}
 
 /// A basic directory inode structure
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct BasicDir {
     /// The index of the block in the Directory Table where the directory entry information starts
     pub block_idx: u32,
@@ -98,12 +104,14 @@ pub struct BasicDir {
     /// The inode_number of the parent of this directory. If this is the root directory, this will be 1
     pub parent_inode_number: Idx,
 }
+unsafe impl crate::Repr for BasicDir {}
 
 /// A full extended directory inode structure
 ///
 /// This inode is followed by `index_count + 1` directory index entries for faster
 /// lookup in the directory table
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct ExtendedDir {
     /// The number of hard links to this directory
     pub hard_link_count: u32,
@@ -121,6 +129,7 @@ pub struct ExtendedDir {
     /// An index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
     pub xattr_idx: xattr::Idx,
 }
+unsafe impl crate::Repr for ExtendedDir {}
 
 /// A basic file inode structure
 ///
@@ -129,7 +138,8 @@ pub struct ExtendedDir {
 /// needed to store file_size bytes. If this file does not have a fragment, the size of the list is
 /// the number of blocks needed to store file_size bytes, rounded up. Each item in the list
 /// describes the (possibly compressed) size of a block.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct BasicFile {
     /// The offset from the start of the archive where the data blocks are stored
     pub blocks_start: u32,
@@ -147,6 +157,7 @@ pub struct BasicFile {
     /// The (uncompressed) size of this file
     pub file_size: u32,
 }
+unsafe impl crate::Repr for BasicFile {}
 
 /// A full extended file inode structure
 ///
@@ -155,7 +166,8 @@ pub struct BasicFile {
 /// needed to store file_size bytes. If this file does not have a fragment, the size of the list is
 /// the number of blocks needed to store file_size bytes, rounded up. Each item in the list
 /// describes the (possibly compressed) size of a block.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct ExtendedFile {
     /// The offset from the start of the archive where the data blocks are stored
     pub blocks_start: u64,
@@ -182,6 +194,7 @@ pub struct ExtendedFile {
     /// Set to `0xFFFFFFFF` if the inode has no extended attributes
     pub xattr_idx: xattr::Idx,
 }
+unsafe impl crate::Repr for ExtendedFile {}
 
 /// A symlink inode structure
 ///
@@ -189,7 +202,8 @@ pub struct ExtendedFile {
 /// The path string may not contain any null characters.
 /// If the header had a kind `EXT_SYMLINK`, the path string is followed by an xattr_idx u32, which
 /// is an index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct Symlink {
     /// The number of hard links to this symlink
     pub hard_link_count: u32,
@@ -197,18 +211,22 @@ pub struct Symlink {
     /// which describes the target of this symlink
     pub target_size: u32,
 }
+unsafe impl crate::Repr for Symlink {}
 
 /// A basic device inode structure
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct BasicDevice {
     /// The number of hard links to this device
     pub hard_link_count: u32,
     /// The device represented
     pub device: DeviceNumber,
 }
+unsafe impl crate::Repr for BasicDevice {}
 
 /// A full extended device inode structure
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct ExtendedDevice {
     /// The number of hard links to this device
     pub hard_link_count: u32,
@@ -217,8 +235,10 @@ pub struct ExtendedDevice {
     /// An index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
     pub xattr_idx: xattr::Idx,
 }
+unsafe impl crate::Repr for ExtendedDevice {}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct DeviceNumber(pub u32);
 
 impl DeviceNumber {
@@ -238,17 +258,21 @@ impl DeviceNumber {
 }
 
 /// A basic IPC (fifo/socket) inode structure
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct BasicIpc {
     /// The number of hard links to this device
     pub hard_link_count: u32,
 }
+unsafe impl crate::Repr for BasicIpc {}
 
 /// A full extended IPC (fifo/socket) inode structure
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, packed)]
 pub struct ExtendedIpc {
     /// The number of hard links to this device
     pub hard_link_count: u32,
     /// An index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
     pub xattr_idx: xattr::Idx,
 }
+unsafe impl crate::Repr for ExtendedIpc {}

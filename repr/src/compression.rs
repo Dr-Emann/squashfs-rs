@@ -1,10 +1,8 @@
 //! Methods of compression
 
-use packed_serialize::PackedStruct;
-
 pub mod options;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PackedStruct)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Id(pub u16);
 
 impl Id {
