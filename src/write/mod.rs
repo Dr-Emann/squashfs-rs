@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use positioned_io::RandomAccessFile;
-use std::fs;
 use std::path::Path;
 use std::{fmt, mem, ptr};
+use std::{fs, io};
 
 use bstr::BString;
 
@@ -30,6 +30,28 @@ pub struct Archive {
     root: ItemRef,
     uid_gid: BTreeSet<repr::uid_gid::Id>,
     logger: Logger,
+}
+
+pub struct SubdirBuilder;
+
+impl SubdirBuilder {
+    pub fn begin_dir<S: Into<BString>>(&self, name: S) -> SubdirBuilder {
+        self._begin_dir(name.into())
+    }
+
+    fn _begin_dir(&self, name: BString) -> SubdirBuilder {
+        todo!()
+    }
+
+    pub fn done_subdirs(&self) -> DirBuilder {
+        todo!()
+    }
+}
+
+impl Archive {
+    pub fn begin_root(&self) -> SubdirBuilder {
+        todo!()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -123,7 +145,7 @@ impl DirBuilder {
         self.entries.insert(name, item);
     }
 
-    pub fn build(self, archive: &mut Archive) -> ItemRef {
+    pub fn finish(self, archive: &mut Archive) -> ItemRef {
         // This is safe because self will not be dropped
         let entries = unsafe { ptr::read(&self.entries) };
         let item = Item {
@@ -149,6 +171,45 @@ impl Drop for DirBuilder {
     }
 }
 
+pub struct FileBuilder {
+    uid: repr::uid_gid::Id,
+    gid: repr::uid_gid::Id,
+    mode: repr::Mode,
+    mtime: DateTime<Utc>,
+    contents: Box<dyn io::Read>,
+}
+
+impl FileBuilder {
+    pub fn set_uid(&mut self, id: u32) -> &mut Self {
+        self.uid = repr::uid_gid::Id(id);
+        self
+    }
+
+    pub fn set_gid(&mut self, id: u32) -> &mut Self {
+        self.gid = repr::uid_gid::Id(id);
+        self
+    }
+
+    pub fn set_mode(&mut self, mode: crate::Mode) -> &mut Self {
+        self.mode = mode;
+        self
+    }
+
+    pub fn set_modified_time(&mut self, date_time: DateTime<Utc>) -> &mut Self {
+        self.mtime = date_time;
+        self
+    }
+
+    pub fn set_contents(&mut self, contents: Box<dyn io::Read>) -> &mut Self {
+        self.contents = contents;
+        self
+    }
+
+    pub fn finish(self, archive: &mut Archive) -> ItemRef {
+        todo!()
+    }
+}
+
 impl Archive {
     pub fn create<P: AsRef<Path>>(path: P) -> Result<Self> {
         ArchiveBuilder::new().build_path(path)
@@ -160,6 +221,10 @@ impl Archive {
 
     pub fn create_dir(&mut self) -> DirBuilder {
         DirBuilder::new(self.logger.clone())
+    }
+
+    pub fn create_file(&self) -> FileBuilder {
+        todo!()
     }
 
     fn get(&self, item_ref: ItemRef) -> &Item {
