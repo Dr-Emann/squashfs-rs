@@ -1,67 +1,73 @@
 use flate2::{FlushCompress, FlushDecompress};
-use std::cell::{RefCell, RefMut};
 use std::io;
 
 pub type Config = repr::compression::options::Gzip;
 
 #[derive(Debug)]
-struct State {
+pub struct Gzip {
+    config: Config,
     decompressor: flate2::Decompress,
     compressor: flate2::Compress,
 }
 
-#[derive(Debug, Default)]
-pub struct Gzip {
-    config: Config,
-    state: thread_local::ThreadLocal<RefCell<State>>,
+impl Default for Gzip {
+    fn default() -> Self {
+        Self::with_config(Config::default())
+    }
 }
 
 impl Gzip {
-    fn state(&self) -> &RefCell<State> {
-        self.state.get_or(|| RefCell::new(State::new(self.config)))
+    fn with_config(config: Config) -> Self {
+        let level = flate2::Compression::new(config.compression_level);
+        Self {
+            config,
+            decompressor: flate2::Decompress::new(true),
+            compressor: flate2::Compress::new(level, true),
+        }
     }
 
-    fn decompressor(&self) -> RefMut<flate2::Decompress> {
-        let state = self.state().borrow_mut();
-        let mut decompressor = RefMut::map(state, |s| &mut s.decompressor);
+    fn decompressor(&mut self) -> &mut flate2::Decompress {
+        let decompressor = &mut self.decompressor;
         decompressor.reset(true);
         decompressor
     }
 
-    fn compressor(&self) -> RefMut<flate2::Compress> {
-        let state = self.state().borrow_mut();
-        let mut compressor = RefMut::map(state, |s| &mut s.compressor);
+    fn compressor(&mut self) -> &mut flate2::Compress {
+        let compressor = &mut self.compressor;
         compressor.reset();
         compressor
     }
-}
 
-impl super::Compress for Gzip {
-    type Config = Config;
-
-    fn configure(&mut self, options: &[u8]) -> io::Result<()> {
-        let config: Config = repr::read(options)?;
-        if config.compression_level < 1 || config.compression_level > 9 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                // Extra braces to avoid format taking a reference to a packed field
-                format!("Invalid compression level ({})", {
-                    config.compression_level
-                }),
-            ));
-        }
-        if config.window_size < 9 || config.window_size > 15 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Invalid window size ({})", { config.window_size }),
-            ));
-        }
-        self.config = config;
-        Ok(())
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    fn compress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
-        let mut compressor = self.compressor();
+    pub fn configured(options: &[u8]) -> io::Result<Self> {
+        let config: Config = repr::read(options)?;
+        let compression_level = config.compression_level;
+        if compression_level < 1 || compression_level > 9 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid compression level ({})", compression_level),
+            ));
+        }
+        let window_size = config.window_size;
+        if window_size < 9 || window_size > 15 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid window size ({})", window_size),
+            ));
+        }
+        let level = flate2::Compression::new(compression_level);
+        Ok(Self {
+            config,
+            compressor: flate2::Compress::new(level, true),
+            decompressor: flate2::Decompress::new(true),
+        })
+    }
+
+    pub fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        let compressor = self.compressor();
         loop {
             let in_offset = min_mem(compressor.total_in(), src.len());
             let input = &src[in_offset..];
@@ -79,8 +85,8 @@ impl super::Compress for Gzip {
         Ok(compressor.total_out() as usize)
     }
 
-    fn decompress(&self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
-        let mut decompressor = self.decompressor();
+    pub fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        let decompressor = self.decompressor();
         loop {
             let in_offset = min_mem(decompressor.total_in(), src.len());
             let input = &src[in_offset..];
@@ -98,19 +104,8 @@ impl super::Compress for Gzip {
         Ok(decompressor.total_out() as usize)
     }
 
-    fn config(&self) -> &Self::Config {
-        &self.config
-    }
-}
-
-impl State {
-    fn new(config: Config) -> Self {
-        let compression = flate2::Compression::new(config.compression_level);
-        Self {
-            decompressor: flate2::Decompress::new(true),
-            compressor: flate2::Compress::new(compression, true),
-            // compressor: flate2::Compress::new_with_window_bits(compression, true, window_bits),
-        }
+    pub fn config(&self) -> Config {
+        self.config
     }
 }
 

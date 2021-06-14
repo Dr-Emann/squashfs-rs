@@ -5,10 +5,12 @@ use crate::shared_position_file::Positioned;
 use byteorder::ReadBytesExt;
 use positioned_io::{RandomAccessFile, ReadAt};
 use slog::Logger;
+use std::cell::RefCell;
 use std::io;
 use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
+use thread_local::ThreadLocal;
 
 #[derive(Debug)]
 pub struct Archive<R> {
@@ -19,7 +21,8 @@ pub struct Archive<R> {
 struct ArchiveInner<R> {
     reader: R,
     superblock: repr::superblock::Superblock,
-    compressor: compression::Compressor,
+    compressor_base: compression::Compressor,
+    compressor: ThreadLocal<RefCell<compression::Compressor>>,
     logger: Logger,
 }
 
@@ -51,7 +54,7 @@ impl<R: ReadAt> Archive<R> {
         let superblock: repr::superblock::Superblock = repr::read(&mut positioned)?;
         log_superblock(&logger, &superblock);
 
-        let mut compressor = validate_superblock(&superblock)?;
+        let compressor_kind = validate_superblock(&superblock)?;
         let flags = superblock.flags;
         // Check for unknown bits
         if !(flags & repr::superblock::Flags::all()).is_empty() {
@@ -61,18 +64,13 @@ impl<R: ReadAt> Archive<R> {
             ))
             .into());
         }
-        // TODO: Load compression options
-        if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
+        let compressor = if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
             let mut options = [0; repr::metablock::SIZE];
             let size = read_metablock(&mut positioned, None, &mut options, false, &logger)?;
-            compressor.configure(&options[..size])?;
-        }
-        if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
-            return Err(SuperblockError::UnsupportedOption(
-                "Compressor options are not currently supported".into(),
-            )
-            .into());
-        }
+            Compressor::configured(compressor_kind, &options[..size])?
+        } else {
+            Compressor::new(compressor_kind)
+        };
         slog::info!(logger, "Loaded compressor {:?}", compressor.config(); "compression_kind" => %compressor.kind());
 
         let id_indexes = metablock_indexes::<repr::uid_gid::Id, _>(
@@ -88,7 +86,8 @@ impl<R: ReadAt> Archive<R> {
             inner: Arc::new(ArchiveInner {
                 reader,
                 superblock,
-                compressor,
+                compressor_base: compressor,
+                compressor: ThreadLocal::new(),
                 logger,
             }),
         })
@@ -134,7 +133,7 @@ impl<R: io::Read> Iterator for MetablockIndexes<R> {
 
 fn validate_superblock(
     superblock: &repr::superblock::Superblock,
-) -> Result<Compressor, SuperblockError> {
+) -> Result<compression::Kind, SuperblockError> {
     if superblock.magic != repr::superblock::MAGIC {
         return Err(SuperblockError::BadMagic {
             magic: superblock.magic,
@@ -166,12 +165,12 @@ fn validate_superblock(
             kind: compression_kind,
         });
     }
-    Ok(compression_kind.compressor())
+    Ok(compression_kind)
 }
 
 fn read_metablock<R: io::Read>(
     mut reader: R,
-    compressor: Option<compression::Compressor>,
+    compressor: Option<&mut compression::Compressor>,
     dst: &mut [u8],
     exact: bool,
     logger: &Logger,

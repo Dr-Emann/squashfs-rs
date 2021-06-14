@@ -10,6 +10,7 @@ use crate::config::FragmentMode;
 use crate::shared_position_file::{Positioned, SharedWriteAt};
 
 use crate::compression;
+use crate::compression::Compressor;
 use crate::errors::Result;
 use crate::Mode;
 use repr::Repr;
@@ -335,7 +336,7 @@ pub struct ArchiveBuilder {
     pub find_duplicates: bool,
     pub exportable: bool,
     pub fragment_mode: FragmentMode,
-    pub compressor: compression::Kind,
+    pub compressor_kind: compression::Kind,
 
     modified_time: DateTime<Utc>,
     logger: Option<Logger>,
@@ -354,7 +355,7 @@ impl Default for ArchiveBuilder {
             find_duplicates: true,
             exportable: true,
             fragment_mode: FragmentMode::default(),
-            compressor: compression::Kind::default(),
+            compressor_kind: compression::Kind::default(),
             modified_time: Utc::now(),
             logger: None,
         }
@@ -400,7 +401,7 @@ impl ArchiveBuilder {
             file: writer,
             mtime: self.modified_time,
             block_size: self.block_size,
-            compression: self.compressor.compressor(),
+            compression: Compressor::new(self.compressor_kind),
             root: ItemRef(usize::MAX),
             items: Vec::new(),
             uid_gid: BTreeSet::new(),
