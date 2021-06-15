@@ -143,7 +143,7 @@ mod tests {
     #[cfg(feature = "gzip")]
     #[test]
     fn gzip_compressor() {
-        let c = gzip::Gzip::default();
+        let mut c = gzip::Gzip::default();
         let src: &[u8] = b"11111111111111111111111111111111111c111";
         let mut dest = [0; 64];
         let mut clear_dest = vec![0u8; src.len()];
