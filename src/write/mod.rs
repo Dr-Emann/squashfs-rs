@@ -15,8 +15,10 @@ use crate::errors::Result;
 use crate::Mode;
 use repr::Repr;
 use slog::Logger;
+use std::cell::{RefCell, RefMut};
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
+use thread_local::ThreadLocal;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
 const MODE_DEFAULT_FILE: Mode = Mode::O644;
@@ -25,7 +27,8 @@ pub struct Archive {
     file: Box<dyn SharedWriteAt>,
     mtime: DateTime<Utc>,
     block_size: u32,
-    compression: compression::Compressor,
+    compression: ThreadLocal<RefCell<Compressor>>,
+    compression_base: Compressor,
     flags: repr::superblock::Flags,
     items: Vec<Item>,
     root: ItemRef,
@@ -264,7 +267,7 @@ impl Archive {
             modification_time: date_time_to_mtime(self.mtime, &self.logger),
             block_size: self.block_size,
             fragment_entry_count: 0, // TODO
-            compression_id: repr::compression::Id(self.compression.kind().id()),
+            compression_id: repr::compression::Id(self.compression_base.kind().id()),
             block_log: self.block_size.trailing_zeros() as _,
             flags: self.flags,
             id_count: self.uid_gid.len().try_into().expect("too many ids"),
@@ -401,7 +404,8 @@ impl ArchiveBuilder {
             file: writer,
             mtime: self.modified_time,
             block_size: self.block_size,
-            compression: Compressor::new(self.compressor_kind),
+            compression: ThreadLocal::new(),
+            compression_base: Compressor::new(self.compressor_kind),
             root: ItemRef(usize::MAX),
             items: Vec::new(),
             uid_gid: BTreeSet::new(),

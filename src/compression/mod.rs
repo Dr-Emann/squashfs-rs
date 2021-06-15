@@ -17,7 +17,7 @@ pub enum Kind {
     Unknown = 0,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Compressor {
     #[cfg(feature = "gzip")]
     Gzip(gzip::Gzip),

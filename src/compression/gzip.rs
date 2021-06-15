@@ -16,6 +16,12 @@ impl Default for Gzip {
     }
 }
 
+impl Clone for Gzip {
+    fn clone(&self) -> Self {
+        Self::with_config(self.config)
+    }
+}
+
 impl Gzip {
     fn with_config(config: Config) -> Self {
         let level = flate2::Compression::new(config.compression_level);
