@@ -15,6 +15,7 @@ fn main() {
     child_dir.set_uid(1000).set_gid(1000);
     child_dir.set_modified_time(DateTime::from(std::time::UNIX_EPOCH));
 
+    /*
     let mut file = archive.create_file();
     file.set_contents(Box::new(b"hi there" as &[u8]));
     file.set_mode(sqfs::Mode::from_bits_truncate(0o555));
@@ -23,9 +24,10 @@ fn main() {
     let file_ref = file.finish(&mut archive);
 
     child_dir.add_item("my_file", file_ref);
+     */
     let child_dir_ref = child_dir.finish(&mut archive);
 
-    root.add_item("my_file_link", file_ref);
+    // root.add_item("my_file_link", file_ref);
     root.add_item("subdir", child_dir_ref);
 
     let root_ref = root.finish(&mut archive);

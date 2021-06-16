@@ -1,3 +1,6 @@
+mod compress_threads;
+mod dir;
+
 use chrono::{DateTime, Utc};
 use positioned_io::RandomAccessFile;
 use std::path::Path;
@@ -15,7 +18,7 @@ use crate::errors::Result;
 use crate::Mode;
 use repr::Repr;
 use slog::Logger;
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
 use thread_local::ThreadLocal;
