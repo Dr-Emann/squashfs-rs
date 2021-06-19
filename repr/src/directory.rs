@@ -4,12 +4,14 @@
 //!
 //! For each directory inode, the directory table stores a list of all entries stored inside, with
 //! references back to the inodes that describe those entries.
-//
-//The entry list is self is sorted ASCIIbetically by entry name. To save space, a delta encoding is
-// used to store the inode number, i.e. the list is preceded by a header with a reference inode
-// number and all entries store the difference to that. Furthermore, the header also includes the
-// location of a metadata block that the inodes of all of the following entries are in.
-// The entries just store an offset into the uncompressed metadata block.
+//!
+//! The entry list is self is sorted ASCIIbetically by entry name. To save space, a delta encoding is
+//!  used to store the inode number, i.e. the list is preceded by a header with a reference inode
+//!  number and all entries store the difference to that. Furthermore, the header also includes the
+//!  location of a metadata block that the inodes of all of the following entries are in.
+//!  The entries just store an offset into the uncompressed metadata block.
+
+use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 use crate::inode;
 
@@ -20,7 +22,7 @@ use crate::inode;
 ///
 ///A header must not be followed by more than 256 entries. If there are more entries,
 /// a new header is emitted.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Header {
     /// Number of entries following the header
@@ -37,7 +39,6 @@ pub struct Header {
     /// could of course be optimized to prevent this
     pub inode_number: inode::Idx,
 }
-unsafe impl crate::Repr for Header {}
 
 /// A directory entry
 ///
@@ -50,7 +51,7 @@ unsafe impl crate::Repr for Header {}
 ///
 ///The file names are stored without trailing null bytes. Since a zero length name makes no sense,
 /// the name length is stored off-by-one, i.e. the value 0 cannot be encoded
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Entry {
     /// An offset into the uncompressed inode metadata block
@@ -64,7 +65,6 @@ pub struct Entry {
     /// One less than the size of the entry name
     pub name_size: u16,
 }
-unsafe impl crate::Repr for Entry {}
 
 /// A directory index
 ///
@@ -76,7 +76,7 @@ unsafe impl crate::Repr for Entry {}
 /// crosses a metadata block boundary.
 ///
 /// A directory index is followed by string name of `name_size + 1` bytes
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Index {
     /// A byte offset from the first directory header to the current header, as if the uncompressed
@@ -87,4 +87,3 @@ pub struct Index {
     /// One less than the size of the entry name
     pub name_size: u32,
 }
-unsafe impl crate::Repr for Index {}

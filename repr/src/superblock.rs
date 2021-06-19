@@ -3,6 +3,7 @@
 //! Important information about the archive, including locations of other sections
 
 use bitflags::bitflags;
+use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 use crate::{compression, inode};
 
@@ -14,7 +15,7 @@ pub const VERSION_MAJOR: u16 = 4;
 /// The supported minor version of the squashfs archive metadata
 pub const VERSION_MINOR: u16 = 0;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Superblock {
     /// Must match the value of [`MAGIC`](constant.MAGIC.html) (`0x73717368`/'hsqs') to be considered a
@@ -63,10 +64,10 @@ pub struct Superblock {
     /// The byte offset at which the export table starts
     pub export_table_start: u64,
 }
-unsafe impl crate::Repr for Superblock {}
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, AsBytes, FromBytes)]
+    #[repr(transparent)]
     pub struct Flags: u16 {
         /// Inodes are stored uncompressed. For backward compatibility reasons, UID/GIDs are also stored uncompressed.
         const UNCOMPRESSED_INODES     = 1;

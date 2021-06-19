@@ -11,6 +11,7 @@
 //! * [Xattr Table](xattr/index.html)
 
 use bitflags::bitflags;
+use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 use std::fmt;
 use std::fmt::Write;
@@ -39,7 +40,6 @@ pub const BLOCK_SIZE_DEFAULT: u32 = 1 << BLOCK_LOG_DEFAULT as u32;
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C, packed)]
 pub struct MetablockHeader(pub u16);
-unsafe impl Repr for MetablockHeader {}
 
 impl MetablockHeader {
     /// Return true if the following block is compressed
@@ -54,7 +54,8 @@ impl MetablockHeader {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, AsBytes, FromBytes)]
+    #[repr(transparent)]
     pub struct Mode: u16 {
         const OTHER_EXEC =  0o000_001;
         const OTHER_WRITE = 0o000_002;
@@ -80,17 +81,7 @@ bitflags! {
     }
 }
 
-/// Trait to specify that the type is repr(C, packed)
-pub unsafe trait Repr: Sized {
-    const SIZE: usize = mem::size_of::<Self>();
-
-    #[inline]
-    fn as_bytes(&self) -> &[u8] {
-        crate::as_bytes(self)
-    }
-}
-
-pub fn read<T: Repr, R: io::Read>(mut reader: R) -> io::Result<T> {
+pub fn read<T: FromBytes, R: io::Read>(mut reader: R) -> io::Result<T> {
     let mut val: MaybeUninit<T> = MaybeUninit::uninit();
     let slice =
         unsafe { std::slice::from_raw_parts_mut(val.as_mut_ptr() as *mut u8, mem::size_of::<T>()) };
@@ -98,19 +89,15 @@ pub fn read<T: Repr, R: io::Read>(mut reader: R) -> io::Result<T> {
     return Ok(unsafe { val.assume_init() });
 }
 
-pub fn write<T: Repr, W: io::Write>(mut writer: W, item: &T) -> io::Result<()> {
-    writer.write_all(as_bytes(item))
+pub fn write<T: AsBytes, W: io::Write>(mut writer: W, item: &T) -> io::Result<()> {
+    writer.write_all(item.as_bytes())
 }
 
-pub fn from_bytes<T: Repr>(data: &[u8]) -> Option<&T> {
+pub fn from_bytes<T: FromBytes + Unaligned>(data: &[u8]) -> Option<&T> {
     if data.len() < mem::size_of::<T>() {
         return None;
     }
     Some(unsafe { &*(data.as_ptr() as *const T) })
-}
-
-pub fn as_bytes<T: Repr>(t: &T) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(t as *const T as *const u8, mem::size_of_val(t)) }
 }
 
 impl Mode {

@@ -3,9 +3,10 @@
 //! If non-default compression options have been used, then these are stored here.
 
 use bitflags::bitflags;
+use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 /// Compression options for the gzip compressor
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Gzip {
     /// Should be in range 1…9 (inclusive). Defaults to 9.
@@ -18,7 +19,6 @@ pub struct Gzip {
     /// If no flags are set, the default strategy is implicitly used.
     pub strategies: GzipStrategies,
 }
-unsafe impl crate::Repr for Gzip {}
 
 impl Default for Gzip {
     fn default() -> Self {
@@ -34,6 +34,8 @@ bitflags! {
     /// A bitfield describing the enabled strategies.
     ///
     /// If no flags are set, the default strategy is implicitly used.
+    #[derive(FromBytes, AsBytes)]
+    #[repr(transparent)]
     pub struct GzipStrategies: u16 {
         const DEFAULT = 0x01;
         const FILTERED = 0x02;
@@ -50,7 +52,7 @@ impl Default for GzipStrategies {
 }
 
 /// Compression options for the xz compressor
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Xz {
     /// Should be > 8KiB, and must be either the sum of a power of two,
@@ -60,11 +62,12 @@ pub struct Xz {
     /// better compress executable code.
     pub executable_filters: XzFilters,
 }
-unsafe impl crate::Repr for Xz {}
 
 bitflags! {
     /// A bitfield describing the additional enabled filters attempted to
     /// better compress executable code.
+    #[derive(AsBytes, FromBytes)]
+    #[repr(transparent)]
     pub struct XzFilters: u32 {
         const X86 = 0x01;
         const POWERPC = 0x02;
@@ -76,7 +79,7 @@ bitflags! {
 }
 
 /// Compression options for the lz4 compressor
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Lz4 {
     /// The only supported value is 1 (`LZ4_LEGACY`)
@@ -84,7 +87,6 @@ pub struct Lz4 {
     /// A bitfield describing the enabled LZ4 flags
     pub flags: Lz4Flags,
 }
-unsafe impl crate::Repr for Lz4 {}
 
 impl Default for Lz4 {
     fn default() -> Self {
@@ -98,7 +100,8 @@ impl Default for Lz4 {
 bitflags! {
     /// A bitfield describing the additional enabled filters attempted to
     /// better compress executable code.
-    #[derive(Default)]
+    #[derive(Default, AsBytes, FromBytes)]
+    #[repr(transparent)]
     pub struct Lz4Flags: u32 {
         /// Use LZ4 High Compression(HC) mode
         const HIGH_COMPRESSION = 0x01;
@@ -106,17 +109,16 @@ bitflags! {
 }
 
 /// Compression options for the zstd compressor
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Zstd {
     /// Should be in range 1..22 (inclusive).
     /// The real maximum is the zstd defined `ZSTD_maxCLevel()`
     pub compression_level: u32,
 }
-unsafe impl crate::Repr for Zstd {}
 
 /// Compression options for the lzo compressor
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Lzo {
     /// Should be in range 1..22 (inclusive).
@@ -129,7 +131,6 @@ pub struct Lzo {
     /// Has to be 0 for all other algorithms.
     pub level: u32,
 }
-unsafe impl crate::Repr for Lzo {}
 
 impl Default for Lzo {
     fn default() -> Self {
@@ -141,8 +142,8 @@ impl Default for Lzo {
 }
 
 /// Which variant of LZO to use
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[repr(C, packed)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes)]
+#[repr(transparent)]
 pub struct LzoAlgorithm(pub u32);
 
 impl LzoAlgorithm {

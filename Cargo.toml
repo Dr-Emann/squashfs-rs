@@ -30,7 +30,7 @@ thiserror = "1.0"
 thread_local = "1.0"
 
 crossbeam-channel = "0.5"
-rayon = "1.5"
+zerocopy = "0.5"
 
 flate2 = { version = "1.0", optional = true }
 

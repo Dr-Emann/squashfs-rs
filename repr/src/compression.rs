@@ -1,8 +1,11 @@
 //! Methods of compression
+//!
+use zerocopy::{AsBytes, FromBytes};
 
 pub mod options;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes)]
+#[repr(transparent)]
 pub struct Id(pub u16);
 
 impl Id {

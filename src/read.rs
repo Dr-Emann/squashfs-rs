@@ -6,11 +6,12 @@ use byteorder::ReadBytesExt;
 use positioned_io::{RandomAccessFile, ReadAt};
 use slog::Logger;
 use std::cell::RefCell;
-use std::io;
 use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
+use std::{io, mem};
 use thread_local::ThreadLocal;
+use zerocopy::FromBytes;
 
 #[derive(Debug)]
 pub struct Archive<R> {
@@ -99,14 +100,14 @@ struct MetablockIndexes<R> {
     block_count: usize,
 }
 
-fn metablock_indexes<T: repr::Repr, At: ReadAt>(
+fn metablock_indexes<T: FromBytes, At: ReadAt>(
     reader: At,
     start: u64,
     end: u64,
     item_count: usize,
 ) -> MetablockIndexes<impl io::Read> {
     assert!(end > start);
-    let total_size = T::SIZE * item_count;
+    let total_size = mem::size_of::<T>() * item_count;
     let block_count = (total_size + (repr::metablock::SIZE - 1)) / repr::metablock::SIZE;
     let reader = Positioned::with_position(reader, start).take(end - start);
     MetablockIndexes {

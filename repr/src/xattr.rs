@@ -28,10 +28,12 @@
 //! Typically, the first occurrence of a value is stored in line and every consecutive use of the
 //! same value uses an out of line value to refer back to the first one.
 
+use zerocopy::{AsBytes, FromBytes, Unaligned};
+
 /// An xattr key
 ///
 /// Followed by a name string of size `name_size`
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Key {
     /// The ID of the key prefix
@@ -41,9 +43,8 @@ pub struct Key {
     /// The size of the key name **including** the omitted prefix but excluding the trailing null byte
     pub name_size: u16,
 }
-unsafe impl crate::Repr for Key {}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Kind(pub u16);
 
@@ -71,7 +72,7 @@ impl Kind {
 ///     location of the value string, similar to an inode reference, but relative to the the first
 ///     metadata block containing the key value pairs.
 /// If the value is not stored out of line, the structure is followed by `value_size` bytes of data
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Value {
     /// The size of the value string
@@ -79,7 +80,6 @@ pub struct Value {
     /// If the value is stored out of line, this is always 8, i.e. the size of an unsigned 64 bit integer
     pub value_size: u32,
 }
-unsafe impl crate::Repr for Value {}
 
 /// The header on the Xattr Lookup Table
 ///
@@ -90,7 +90,7 @@ unsafe impl crate::Repr for Value {}
 ///
 /// The table is followed by u64 locations of metadata blocks.
 /// There will be `ceil(xattr_entry_count * sizeof(LookupEntry) / metablock_size)` items
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct LookupTable {
     /// The absolute position of the first metadata block holding the key/value pairs.
@@ -100,7 +100,6 @@ pub struct LookupTable {
     /// Unused
     pub _unused: u32,
 }
-unsafe impl crate::Repr for LookupTable {}
 
 /// A Lookup Table Entry
 ///
@@ -111,7 +110,7 @@ unsafe impl crate::Repr for LookupTable {}
 /// If two inodes have the identical xattrs (e.g. they have the same SELinux labels and no other
 /// attributes), the key/value block is only written once, there is only one lookup table entry and
 /// both inodes have the same index.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct LookupEntry {
     /// A reference to the start of the key value block
@@ -123,12 +122,10 @@ pub struct LookupEntry {
     /// This counts only what has been written to disk and including the key/value entry structures
     pub size: u32,
 }
-unsafe impl crate::Repr for LookupEntry {}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Ref(pub u64);
-unsafe impl crate::Repr for Ref {}
 
 impl Ref {
     #[inline]
@@ -143,7 +140,6 @@ impl Ref {
 }
 
 /// References the entry with the `i`th index in the Xattr Id Table
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Idx(pub u32);
-unsafe impl crate::Repr for Idx {}

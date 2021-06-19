@@ -16,12 +16,12 @@ use crate::compression;
 use crate::compression::Compressor;
 use crate::errors::Result;
 use crate::Mode;
-use repr::Repr;
 use slog::Logger;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
 use thread_local::ThreadLocal;
+use zerocopy::AsBytes;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
 const MODE_DEFAULT_FILE: Mode = Mode::O644;
@@ -285,12 +285,10 @@ impl Archive {
             fragment_table_start: u64::MAX,
             export_table_start: u64::MAX,
         };
-        let writer = Positioned::with_position(
-            &*self.file,
-            repr::superblock::Superblock::SIZE.try_into().unwrap(),
-        );
         // TODO: data blocks? compression_options
-        superblock.inode_table_start = repr::superblock::Superblock::SIZE.try_into().unwrap();
+        superblock.inode_table_start = mem::size_of_val(&superblock).try_into().unwrap();
+
+        let writer = Positioned::with_position(&*self.file, superblock.inode_table_start);
         let mut inode_table = Vec::new();
         for (i, item) in self.items.drain(..).enumerate() {
             let inode_kind = item.kind();
