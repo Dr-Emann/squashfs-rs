@@ -1,10 +1,12 @@
+use super::pool;
 use crossbeam_channel as channel;
-use std::io;
+use futures::channel::oneshot;
+use futures::FutureExt;
+use std::future::Future;
 use std::mem;
-use std::thread;
+use std::{io, thread};
 
 pub struct ParallelCompressor {
-    buffers: (channel::Sender<Vec<u8>>, channel::Receiver<Vec<u8>>),
     // Destructors are run in top-down order, so this closes the sender before joining
     sender: channel::Sender<Request>,
     threads: ThreadJoiner,
@@ -18,20 +20,12 @@ enum RequestType {
 struct Request {
     data: Vec<u8>,
     request_type: RequestType,
-    reply: channel::Sender<io::Result<Response>>,
+    reply: oneshot::Sender<io::Result<Response>>,
 }
 
 pub struct Response {
-    pub data: Vec<u8>,
+    pub data: pool::Handle,
     pub compressed: bool,
-    data_return: channel::Sender<Vec<u8>>,
-}
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        let data = mem::take(&mut self.data);
-        let _ = self.data_return.try_send(data);
-    }
 }
 
 struct ThreadJoiner(Vec<thread::JoinHandle<()>>);
@@ -49,38 +43,23 @@ impl ParallelCompressor {
         assert!(threads > 0);
 
         let (tx, rx) = channel::bounded(0);
-        let buffers = channel::bounded(threads);
         let mut thread_handles = Vec::with_capacity(threads);
         for _ in 0..threads - 1 {
             thread_handles.push(std::thread::spawn(thread_fn(
                 rx.clone(),
                 compressor.clone(),
-                buffers.clone(),
             )));
         }
-        thread_handles.push(std::thread::spawn(thread_fn(
-            rx,
-            compressor,
-            buffers.clone(),
-        )));
+        thread_handles.push(std::thread::spawn(thread_fn(rx, compressor)));
 
         Self {
-            buffers,
             threads: ThreadJoiner(thread_handles),
             sender: tx,
         }
     }
 
-    pub fn response(&self, data: Vec<u8>, compressed: bool) -> Response {
-        Response {
-            data,
-            compressed,
-            data_return: self.buffers.0.clone(),
-        }
-    }
-
-    pub fn compress(&self, data: Vec<u8>) -> channel::Receiver<io::Result<Response>> {
-        let (tx, rx) = channel::bounded(1);
+    pub fn compress(&self, data: Vec<u8>) -> impl Future<Output = io::Result<Response>> {
+        let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
             request_type: RequestType::Compress,
@@ -89,15 +68,15 @@ impl ParallelCompressor {
 
         self.sender.send(request).unwrap();
 
-        rx
+        rx.map(Result::unwrap)
     }
 
     pub fn decompress(
         &self,
         data: Vec<u8>,
         max_size: usize,
-    ) -> channel::Receiver<io::Result<Response>> {
-        let (tx, rx) = channel::bounded(1);
+    ) -> impl Future<Output = io::Result<Response>> {
+        let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
             request_type: RequestType::Decompress { max_size },
@@ -106,21 +85,24 @@ impl ParallelCompressor {
 
         self.sender.send(request).unwrap();
 
-        rx
+        rx.map(Result::unwrap)
     }
 }
 
 fn thread_fn(
     rx: channel::Receiver<Request>,
     mut compressor: super::Compressor,
-    (buffer_tx, buffer_rx): (channel::Sender<Vec<u8>>, channel::Receiver<Vec<u8>>),
 ) -> impl FnOnce() -> () {
     move || {
         for mut request in rx {
+            let data = if request.data.len() <= repr::metablock::SIZE {
+                pool::metablock()
+            } else {
+                pool::datablock()
+            };
             let mut response = Response {
-                data: buffer_rx.try_recv().unwrap_or_default(),
+                data,
                 compressed: false,
-                data_return: buffer_tx.clone(),
             };
             match request.request_type {
                 RequestType::Compress => {
@@ -141,7 +123,7 @@ fn thread_fn(
                         }
                         Err(e) => Err(e),
                     };
-                    let _ = request.reply.try_send(response);
+                    let _ = request.reply.send(response);
                 }
                 RequestType::Decompress { max_size } => {
                     response.data.resize(max_size, 0);
@@ -151,10 +133,9 @@ fn thread_fn(
                             response.data.truncate(n);
                             response
                         });
-                    let _ = request.reply.try_send(response);
+                    let _ = request.reply.send(response);
                 }
             }
-            let _ = buffer_tx.try_send(mem::take(&mut request.data));
         }
     }
 }
@@ -167,35 +148,28 @@ mod tests {
 
     #[test]
     fn multiple_requests() {
-        let duplicate_data: Vec<u8> = "hi there you all"
-            .as_bytes()
-            .iter()
-            .copied()
-            .cycle()
-            .take(4 * 1024)
-            .collect();
+        futures::executor::block_on(async {
+            let duplicate_data: Vec<u8> = "hi there you all"
+                .as_bytes()
+                .iter()
+                .copied()
+                .cycle()
+                .take(4 * 1024)
+                .collect();
 
-        let uncompressible = vec![1];
+            let uncompressible = vec![1];
 
-        let compressor = ParallelCompressor::new(2, Compressor::new(compression::Kind::ZLib));
-        let response1 = compressor.compress(duplicate_data.clone());
-        assert!(response1.try_recv().is_err());
+            let compressor = ParallelCompressor::new(2, Compressor::new(compression::Kind::ZLib));
+            let response1 = compressor.compress(duplicate_data.clone());
+            let response2 = compressor.compress(uncompressible.clone());
 
-        let response2 = compressor.compress(uncompressible.clone());
-        assert!(response1.try_recv().is_err());
-        assert!(response2.try_recv().is_err());
+            let (response1, response2) =
+                futures::join!(response1.map(Result::unwrap), response2.map(Result::unwrap));
 
-        let response2 = response2
-            .recv_timeout(Duration::from_millis(500))
-            .unwrap()
-            .unwrap();
-        let response1 = response1
-            .recv_timeout(Duration::from_millis(500))
-            .unwrap()
-            .unwrap();
-        assert!(response1.compressed);
-        assert!(response1.data.len() < duplicate_data.len());
-        assert!(!response2.compressed);
-        assert_eq!(response2.data, uncompressible);
+            assert!(response1.compressed);
+            assert!(response1.data.len() < duplicate_data.len());
+            assert!(!response2.compressed);
+            assert_eq!(&*response2.data, &uncompressible);
+        });
     }
 }

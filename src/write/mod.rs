@@ -1,5 +1,6 @@
 mod compress_threads;
 mod dir;
+mod pool;
 
 use chrono::{DateTime, Utc};
 use positioned_io::RandomAccessFile;
