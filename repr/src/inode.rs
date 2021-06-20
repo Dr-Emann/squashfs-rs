@@ -5,21 +5,7 @@
 use crate::{uid_gid, xattr};
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, AsBytes, FromBytes, Unaligned)]
-#[repr(C, packed)]
-pub struct Ref(pub u64);
-
-impl Ref {
-    #[inline]
-    pub fn block_idx(self) -> u32 {
-        ((self.0 >> 16) & 0xFFFF_FFFF) as u32
-    }
-
-    #[inline]
-    pub fn start_offset(self) -> u16 {
-        (self.0 & 0xFFFF) as u16
-    }
-}
+pub use crate::metablock::Ref;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
@@ -60,7 +46,14 @@ impl Kind {
     /// Following the header is a [`ExtendedIpc`](struct.ExtendedIpc.html) structure
     pub const EXT_SOCKET: Kind = Kind(14);
 
-    pub const MAX: Kind = Kind::EXT_SOCKET;
+    pub const fn to_basic(self) -> Self {
+        let Kind(val) = self;
+        if val <= Self::BASIC_SOCKET.0 {
+            self
+        } else {
+            Self(val - Self::BASIC_SOCKET.0)
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]

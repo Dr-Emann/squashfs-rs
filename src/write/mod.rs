@@ -276,7 +276,7 @@ impl Archive {
             id_count: self.uid_gid.len().try_into().expect("too many ids"),
             version_major: repr::superblock::VERSION_MAJOR,
             version_minor: repr::superblock::VERSION_MINOR,
-            root_inode_ref: repr::inode::Ref(0), // TODO
+            root_inode_ref: repr::inode::Ref::default(), // TODO
             bytes_used: 0,
             id_table_start: u64::MAX,
             xattr_id_table_start: u64::MAX,

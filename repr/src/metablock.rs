@@ -28,6 +28,7 @@
 //!
 //! [`UNCOMPRESSED_INODES`]: ../superblock/struct.Flags.html#associatedconstant.UNCOMPRESSED_INODES
 
+use std::fmt;
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 pub const SIZE: usize = 8 * 1024;
@@ -35,6 +36,45 @@ pub const SIZE: usize = 8 * 1024;
 pub const COMPRESSED_FLAG: u16 = 0x8000;
 
 pub type Metablock = [u8; SIZE];
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, AsBytes, FromBytes, Unaligned)]
+#[repr(C, packed)]
+pub struct Ref(pub u64);
+
+impl Ref {
+    #[inline]
+    pub fn new(block_start: u32, offset: u16) -> Self {
+        let block_start: u64 = block_start.into();
+        let offset: u64 = offset.into();
+
+        Self(block_start << 16 | offset)
+    }
+
+    #[inline]
+    pub fn block_start(self) -> u32 {
+        ((self.0 >> 16) & 0xFFFF_FFFF) as u32
+    }
+
+    #[inline]
+    pub fn start_offset(self) -> u16 {
+        (self.0 & 0xFFFF) as u16
+    }
+}
+
+impl Default for Ref {
+    fn default() -> Self {
+        Self(!0)
+    }
+}
+
+impl fmt::Debug for Ref {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Ref")
+            .field("block_start", &self.block_start())
+            .field("start_offset", &self.start_offset())
+            .finish()
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]

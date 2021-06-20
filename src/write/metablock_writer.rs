@@ -11,12 +11,6 @@ pub struct MetablockWriter {
     current_block: Vec<u8>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ItemPosition {
-    pub block_start: u32,
-    pub uncompressed_offset: u16,
-}
-
 impl MetablockWriter {
     pub fn new(compressor: Option<Arc<ParallelCompressor>>) -> Self {
         Self {
@@ -26,26 +20,28 @@ impl MetablockWriter {
         }
     }
 
-    fn position(&self) -> ItemPosition {
-        ItemPosition {
-            block_start: self.output.len().try_into().unwrap(),
-            uncompressed_offset: self.current_block.len().try_into().unwrap(),
-        }
+    pub fn position(&self) -> repr::metablock::Ref {
+        repr::metablock::Ref::new(
+            self.output.len().try_into().unwrap(),
+            self.current_block.len().try_into().unwrap(),
+        )
     }
 
-    pub async fn write<T: AsBytes>(&mut self, item: &T) -> io::Result<ItemPosition> {
-        let position = self.position();
-        let item = item.as_bytes();
+    pub async fn write<T: AsBytes>(&mut self, item: &T) -> io::Result<()> {
+        self.write_raw(item.as_bytes()).await
+    }
+
+    pub async fn write_raw(&mut self, data: &[u8]) -> io::Result<()> {
         let remaining_len = repr::metablock::SIZE - self.current_block.len();
-        if remaining_len < item.len() {
-            let (head, tail) = item.split_at(remaining_len);
+        if remaining_len < data.len() {
+            let (head, tail) = data.split_at(remaining_len);
             self.current_block.extend_from_slice(head);
             self.flush().await?;
             self.current_block.extend_from_slice(tail);
         } else {
-            self.current_block.extend_from_slice(item);
+            self.current_block.extend_from_slice(data);
         }
-        Ok(position)
+        Ok(())
     }
 
     pub async fn finish(mut self) -> io::Result<Vec<u8>> {
@@ -83,8 +79,8 @@ mod tests {
     use crate::compression::Compressor;
     use zerocopy::AsBytes;
 
-    fn pos(pos: ItemPosition) -> (u32, u16) {
-        (pos.block_start, pos.uncompressed_offset)
+    fn pos(pos: repr::metablock::Ref) -> (u32, u16) {
+        (pos.block_start(), pos.start_offset())
     }
 
     #[test]
@@ -105,15 +101,17 @@ mod tests {
             let big_t = BigT { data: [0; 1000] };
             // Write 9 * 1000 bytes so the next one will start in the second metablock
             for i in 0..9 {
-                let position = writer.write(&big_t).await.unwrap();
+                let position = writer.position();
+                writer.write(&big_t).await.unwrap();
                 assert_eq!(pos(position), (0, i * 1000));
             }
 
             // This will start in the second metablock. The first metablock should compress well
-            let position = writer.write(&big_t).await.unwrap();
-            assert!((1..400).contains(&position.block_start));
+            let position = writer.position();
+            writer.write(&big_t).await.unwrap();
+            assert!((1..400).contains(&position.block_start()));
             assert_eq!(
-                usize::from(position.uncompressed_offset),
+                usize::from(position.start_offset()),
                 (9 * 1000) % repr::metablock::SIZE
             );
 

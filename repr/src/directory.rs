@@ -15,6 +15,8 @@ use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 use crate::inode;
 
+pub use crate::metablock::Ref;
+
 /// A header which precedes a list of directory entries
 ///
 ///Every time, the inode block changes or the difference of the inode number cannot be encoded in
