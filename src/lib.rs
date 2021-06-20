@@ -2,8 +2,10 @@
 
 use slog::Drain;
 
+mod compress_threads;
 mod compression;
 pub mod config;
+mod pool;
 pub mod read;
 pub mod shared_position_file;
 pub mod write;

@@ -1,10 +1,10 @@
 use super::pool;
+use crate::compression::Compressor;
 use crossbeam_channel as channel;
 use futures::channel::oneshot;
 use futures::FutureExt;
 use std::future::Future;
-use std::mem;
-use std::{io, thread};
+use std::{io, mem, thread};
 
 pub struct ParallelCompressor {
     // Destructors are run in top-down order, so this closes the sender before joining
@@ -12,6 +12,7 @@ pub struct ParallelCompressor {
     threads: ThreadJoiner,
 }
 
+#[derive(Debug, Copy, Clone)]
 enum RequestType {
     Compress,
     Decompress { max_size: usize },
@@ -24,7 +25,7 @@ struct Request {
 }
 
 pub struct Response {
-    pub data: pool::Handle,
+    pub data: pool::Block<'static>,
     pub compressed: bool,
 }
 
@@ -39,7 +40,7 @@ impl Drop for ThreadJoiner {
 }
 
 impl ParallelCompressor {
-    pub fn new(threads: usize, compressor: super::Compressor) -> Self {
+    pub fn new(threads: usize, compressor: Compressor) -> Self {
         assert!(threads > 0);
 
         let (tx, rx) = channel::bounded(0);
@@ -89,27 +90,20 @@ impl ParallelCompressor {
     }
 }
 
-fn thread_fn(
-    rx: channel::Receiver<Request>,
-    mut compressor: super::Compressor,
-) -> impl FnOnce() -> () {
+fn thread_fn(rx: channel::Receiver<Request>, mut compressor: Compressor) -> impl FnOnce() -> () {
     move || {
         for mut request in rx {
-            let data = if request.data.len() <= repr::metablock::SIZE {
-                pool::metablock()
-            } else {
-                pool::datablock()
-            };
+            let mut src = pool::attach_block(mem::take(&mut request.data));
             let mut response = Response {
-                data,
+                data: pool::block(),
                 compressed: false,
             };
-            match request.request_type {
+            let response: io::Result<Response> = match request.request_type {
                 RequestType::Compress => {
                     // TODO: Profile if this should use unsafe set_len
                     // Set to 1 smaller, so compressing to an equal sized result will just be left uncompressed
-                    response.data.resize(request.data.len() - 1, 0);
-                    let response = match compressor.compress(&request.data, &mut response.data) {
+                    response.data.resize(src.len() - 1, 0);
+                    match compressor.compress(&src, &mut response.data) {
                         Ok(n) => {
                             response.data.truncate(n);
                             response.compressed = true;
@@ -117,25 +111,22 @@ fn thread_fn(
                         }
                         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
                             // result should get request data, and we'll return the invalid response data to the pool
-                            mem::swap(&mut request.data, &mut response.data);
+                            mem::swap(&mut src, &mut response.data);
                             response.compressed = false;
                             Ok(response)
                         }
                         Err(e) => Err(e),
-                    };
-                    let _ = request.reply.send(response);
+                    }
                 }
                 RequestType::Decompress { max_size } => {
                     response.data.resize(max_size, 0);
-                    let response = compressor
-                        .decompress(&request.data, &mut response.data)
-                        .map(|n| {
-                            response.data.truncate(n);
-                            response
-                        });
-                    let _ = request.reply.send(response);
+                    compressor.decompress(&src, &mut response.data).map(|n| {
+                        response.data.truncate(n);
+                        response
+                    })
                 }
-            }
+            };
+            let _ = request.reply.send(response);
         }
     }
 }
@@ -144,7 +135,6 @@ fn thread_fn(
 mod tests {
     use super::*;
     use crate::compression::{self, Compressor};
-    use std::time::Duration;
 
     #[test]
     fn multiple_requests() {
