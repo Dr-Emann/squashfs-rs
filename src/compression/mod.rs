@@ -41,7 +41,7 @@ impl Compressor {
         Ok(result)
     }
 
-    pub fn config<'a>(&'a self) -> impl fmt::Debug + 'a {
+    pub fn config(&self) -> impl fmt::Debug {
         match *self {
             #[cfg(feature = "gzip")]
             Compressor::Gzip(ref gzip) => gzip.config(),

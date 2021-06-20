@@ -51,14 +51,14 @@ impl Gzip {
     pub fn configured(options: &[u8]) -> io::Result<Self> {
         let config: Config = repr::read(options)?;
         let compression_level = config.compression_level;
-        if compression_level < 1 || compression_level > 9 {
+        if !(1..=9).contains(&compression_level) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Invalid compression level ({})", compression_level),
             ));
         }
         let window_size = config.window_size;
-        if window_size < 9 || window_size > 15 {
+        if !(9..=15).contains(&window_size) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Invalid window size ({})", window_size),

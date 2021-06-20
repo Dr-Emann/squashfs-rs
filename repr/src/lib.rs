@@ -86,7 +86,7 @@ pub fn read<T: FromBytes, R: io::Read>(mut reader: R) -> io::Result<T> {
     let slice =
         unsafe { std::slice::from_raw_parts_mut(val.as_mut_ptr() as *mut u8, mem::size_of::<T>()) };
     reader.read_exact(slice)?;
-    return Ok(unsafe { val.assume_init() });
+    Ok(unsafe { val.assume_init() })
 }
 
 pub fn write<T: AsBytes, W: io::Write>(mut writer: W, item: &T) -> io::Result<()> {

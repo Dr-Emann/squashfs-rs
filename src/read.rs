@@ -184,7 +184,7 @@ fn read_metablock<R: io::Read>(
     }
 
     if compressed {
-        let compressor = compressor.ok_or_else(|| MetablockError::CompressedCompressorOptions)?;
+        let compressor = compressor.ok_or(MetablockError::CompressedCompressorOptions)?;
         // TODO: Is it worth it to use uninitialized?
         let mut intermediate = [0; repr::metablock::SIZE];
         // Safe to slice because of above ensure!

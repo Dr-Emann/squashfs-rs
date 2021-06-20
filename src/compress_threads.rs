@@ -90,7 +90,7 @@ impl ParallelCompressor {
     }
 }
 
-fn thread_fn(rx: channel::Receiver<Request>, mut compressor: Compressor) -> impl FnOnce() -> () {
+fn thread_fn(rx: channel::Receiver<Request>, mut compressor: Compressor) -> impl FnOnce() {
     move || {
         for mut request in rx {
             let mut src = pool::attach_block(mem::take(&mut request.data));
