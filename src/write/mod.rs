@@ -1,4 +1,5 @@
 mod dir;
+mod metablock_writer;
 
 use chrono::{DateTime, Utc};
 use positioned_io::RandomAccessFile;

@@ -1,8 +1,8 @@
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
-use std::fmt;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
+use std::{fmt, mem};
 
 pub trait Recyclable {
     fn new() -> Self;
@@ -62,6 +62,14 @@ impl<T: Recyclable> Pool<T> {
 pub struct Handle<'a, T: Recyclable> {
     value: ManuallyDrop<T>,
     pool: &'a Pool<T>,
+}
+
+impl<T: Recyclable> Handle<'_, T> {
+    pub fn detach(mut self) -> T {
+        let value = unsafe { ManuallyDrop::take(&mut self.value) };
+        mem::forget(self);
+        value
+    }
 }
 
 impl<T: Recyclable> Deref for Handle<'_, T> {

@@ -41,6 +41,11 @@ pub type Metablock = [u8; SIZE];
 pub struct Header(pub u16);
 
 impl Header {
+    pub fn new(size: u16, compressed: bool) -> Self {
+        debug_assert!(usize::from(size) <= SIZE);
+        Self(size | (if compressed { COMPRESSED_FLAG } else { 0 }))
+    }
+
     pub fn compressed(self) -> bool {
         self.0 & COMPRESSED_FLAG == COMPRESSED_FLAG
     }
