@@ -34,7 +34,10 @@ struct ThreadJoiner(Vec<thread::JoinHandle<()>>);
 impl Drop for ThreadJoiner {
     fn drop(&mut self) {
         for t in self.0.drain(..) {
-            t.join().unwrap();
+            let res = t.join();
+            if !std::thread::panicking() {
+                res.unwrap();
+            }
         }
     }
 }
