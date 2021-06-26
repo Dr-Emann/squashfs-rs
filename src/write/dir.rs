@@ -61,6 +61,7 @@ struct DirBuilder<'a> {
     crossed_metablock: bool,
 }
 
+#[derive(Debug)]
 pub struct Entry {
     pub inode: repr::inode::Ref,
     pub inode_num: repr::inode::Idx,

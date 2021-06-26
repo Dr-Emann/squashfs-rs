@@ -1,4 +1,5 @@
 mod dir;
+mod inode;
 mod metablock_writer;
 
 use chrono::{DateTime, Utc};
@@ -429,9 +430,9 @@ impl ArchiveBuilder {
     }
 }
 
-fn date_time_to_mtime(date_time: DateTime<Utc>, logger: &Logger) -> u32 {
+fn date_time_to_mtime(date_time: DateTime<Utc>, logger: &Logger) -> repr::Time {
     let mtime = date_time.timestamp();
-    if mtime > u32::MAX.into() {
+    let underlying_time = if mtime > u32::MAX.into() {
         slog::warn!(logger, "Modification time is out of range for squashfs"; "date" => %date_time);
         u32::MAX
     } else if mtime < u32::MIN.into() {
@@ -439,5 +440,6 @@ fn date_time_to_mtime(date_time: DateTime<Utc>, logger: &Logger) -> u32 {
         u32::MIN
     } else {
         mtime as u32
-    }
+    };
+    repr::Time(underlying_time)
 }

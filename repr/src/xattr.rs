@@ -129,3 +129,17 @@ pub use crate::metablock::Ref;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Idx(pub u32);
+
+impl Idx {
+    pub const NONE: Idx = Idx(!0);
+
+    pub fn is_some(self) -> bool {
+        self != Self::NONE
+    }
+}
+
+impl Default for Idx {
+    fn default() -> Self {
+        Self::NONE
+    }
+}

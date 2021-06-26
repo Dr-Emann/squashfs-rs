@@ -36,24 +36,6 @@ pub struct Entry {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
-pub struct Size(pub u32);
+pub struct Idx(pub u32);
 
-impl Size {
-    pub const UNCOMPRESSED_FLAG: u32 = 1 << 24;
-
-    pub fn new(mut size: u32, uncompressed: bool) -> Self {
-        assert!(size <= (1 << 20));
-        if uncompressed {
-            size |= Self::UNCOMPRESSED_FLAG;
-        }
-        Self(size)
-    }
-
-    pub fn size(self) -> u32 {
-        self.0 & !Self::UNCOMPRESSED_FLAG
-    }
-
-    pub fn uncompressed(self) -> bool {
-        self.0 & Self::UNCOMPRESSED_FLAG != 0
-    }
-}
+pub use crate::datablock::Size;

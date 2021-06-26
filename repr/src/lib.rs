@@ -20,6 +20,7 @@ use std::mem;
 use std::mem::MaybeUninit;
 
 pub mod compression;
+pub mod datablock;
 pub mod directory;
 pub mod fragment;
 pub mod inode;
@@ -97,7 +98,7 @@ pub fn from_bytes<T: FromBytes + Unaligned>(data: &[u8]) -> Option<&T> {
     if data.len() < mem::size_of::<T>() {
         return None;
     }
-    Some(unsafe { &*(data.as_ptr() as *const T) })
+    Some(unsafe { &*data.as_ptr().cast::<T>() })
 }
 
 impl Mode {
@@ -189,6 +190,10 @@ impl fmt::Display for Mode {
         Ok(())
     }
 }
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
+#[repr(C, packed)]
+pub struct Time(pub u32);
 
 #[test]
 fn mode_tests() {

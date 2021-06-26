@@ -2,7 +2,8 @@
 //!
 //! Metadata (ownership, permissions, etc) for items in the archive
 
-use crate::{uid_gid, xattr};
+use crate::{uid_gid, xattr, Time};
+use std::fmt;
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 pub use crate::metablock::Ref;
@@ -70,7 +71,7 @@ pub struct Header {
     pub gid_idx: uid_gid::Idx,
     /// The unsigned number of seconds (not counting leap seconds) since 00:00, Jan 1 1970 UTC
     /// when the item described by the inode was last modified
-    pub modified_time: u32,
+    pub modified_time: Time,
     /// The position of this inode in the full list of inodes.
     /// Value should be in the range `[1, inode_count]` (inclusive)
     /// This can be treated as a unique identifier for this inode, and can be
@@ -84,8 +85,10 @@ pub struct Header {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct BasicDir {
-    /// The index of the block in the Directory Table where the directory entry information starts
-    pub block_idx: u32,
+    /// The location of the block in the Directory Table where the directory entry information starts
+    ///
+    /// Relative to the start of the directory table
+    pub dir_block_start: u32,
     /// The number of hard links to this directory
     pub hard_link_count: u32,
     /// Total (uncompressed) size in bytes of the entries in the Directory Table, including headers
@@ -108,8 +111,10 @@ pub struct ExtendedDir {
     pub hard_link_count: u32,
     /// Total (uncompressed) size in bytes of the entries in the Directory Table, including headers
     pub file_size: u32,
-    /// The index of the block in the Directory Table where the directory entry information starts
-    pub block_idx: u32,
+    /// The location of the block in the Directory Table where the directory entry information starts
+    ///
+    /// Relative to the start of the directory table
+    pub dir_block_start: u32,
     /// The inode_number of the parent of this directory. If this is the root directory, this will be 1
     pub parent_inode_number: Idx,
     /// The number of directory index entries following the inode structure
@@ -119,6 +124,10 @@ pub struct ExtendedDir {
     pub block_offset: u16,
     /// An index into the xattr lookup table. Set to 0xFFFFFFFF if the inode has no extended attributes
     pub xattr_idx: xattr::Idx,
+}
+
+pub const fn dir_hardlink_count(hardlinks: u32, children: u32) -> u32 {
+    hardlinks + 2 + children
 }
 
 /// A basic file inode structure
@@ -222,7 +231,7 @@ pub struct ExtendedDevice {
     pub xattr_idx: xattr::Idx,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
+#[derive(Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct DeviceNumber(pub u32);
 
@@ -239,6 +248,15 @@ impl DeviceNumber {
 
     pub fn minor(self) -> u32 {
         (self.0 & 0xff) | ((self.0 >> 12) & 0xfff00)
+    }
+}
+
+impl fmt::Debug for DeviceNumber {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("DeviceNumber")
+            .field("major", &self.major())
+            .field("minor", &self.minor())
+            .finish()
     }
 }
 

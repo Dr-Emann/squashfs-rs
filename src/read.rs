@@ -215,7 +215,7 @@ fn log_superblock(logger: &Logger, superblock: &repr::superblock::Superblock) {
     slog::debug!(logger, "Read superblock";
         "magic" => superblock.magic,
         "inode_count" => superblock.inode_count,
-        "modification_time" => superblock.modification_time,
+        "modification_time" => superblock.modification_time.0,
         "block_size" => superblock.block_size,
         "fragment_entry_count" => superblock.fragment_entry_count,
         // Extra braces to avoid a reference to a packed field
