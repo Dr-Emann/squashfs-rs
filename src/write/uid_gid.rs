@@ -1,4 +1,9 @@
+use crate::compress_threads::ParallelCompressor;
+use crate::write::metablock_writer::MetablockWriter;
+use crate::write::two_level;
 use std::collections::HashMap;
+use std::io;
+use std::sync::Arc;
 
 pub struct Table {
     ids: Vec<repr::uid_gid::Id>,

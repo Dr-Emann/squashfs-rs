@@ -31,16 +31,14 @@ impl MetablockWriter {
         self.write_raw(item.as_bytes()).await
     }
 
-    pub async fn write_raw(&mut self, data: &[u8]) {
-        let remaining_len = repr::metablock::SIZE - self.current_block.len();
-        if remaining_len < data.len() {
-            let (head, tail) = data.split_at(remaining_len);
+    pub async fn write_raw(&mut self, mut data: &[u8]) {
+        while repr::metablock::SIZE - self.current_block.len() < data.len() {
+            let (head, tail) = data.split_at(repr::metablock::SIZE - self.current_block.len());
             self.current_block.extend_from_slice(head);
             self.flush().await;
-            self.current_block.extend_from_slice(tail);
-        } else {
-            self.current_block.extend_from_slice(data);
+            data = tail;
         }
+        self.current_block.extend_from_slice(data);
     }
 
     pub async fn finish(mut self) -> Vec<u8> {
