@@ -6,8 +6,14 @@ use std::sync::Arc;
 use std::{cmp, io, mem};
 use zerocopy::AsBytes;
 
+pub struct DirectoryInfo {
+    header_refs: Vec<repr::directory::Ref>,
+    uncompressed_size: u32,
+}
+
 pub struct Table {
     writer: MetablockWriter,
+    // TODO: Is this correct, or should this be u64?
     total_size: usize,
 }
 
@@ -35,7 +41,9 @@ impl Table {
     pub async fn dir(
         &mut self,
         mut contents: impl Stream<Item = Entry> + Unpin,
-    ) -> io::Result<Vec<repr::directory::Ref>> {
+    ) -> io::Result<DirectoryInfo> {
+        let start_size = self.total_size;
+
         let mut builder = self.start_dir();
         let mut header_refs = Vec::new();
 
@@ -46,7 +54,13 @@ impl Table {
         }
 
         builder.flush().await?;
-        Ok(header_refs)
+        drop(builder);
+
+        let end_size = self.total_size;
+        Ok(DirectoryInfo {
+            header_refs,
+            uncompressed_size: (end_size - start_size).try_into().unwrap(),
+        })
     }
 
     pub async fn finish(self) -> io::Result<(usize, Vec<u8>)> {
