@@ -1,6 +1,5 @@
 use super::pool;
 use crate::compression::Compressor;
-use crossbeam_channel as channel;
 use futures::channel::oneshot;
 use futures::FutureExt;
 use std::future::Future;
@@ -8,7 +7,7 @@ use std::{io, mem, thread};
 
 pub struct ParallelCompressor {
     // Destructors are run in top-down order, so this closes the sender before joining
-    sender: channel::Sender<Request>,
+    sender: crossbeam_channel::Sender<Request>,
     threads: ThreadJoiner,
 }
 
@@ -46,7 +45,7 @@ impl ParallelCompressor {
     pub fn new(threads: usize, compressor: Compressor) -> Self {
         assert!(threads > 0);
 
-        let (tx, rx) = channel::bounded(0);
+        let (tx, rx) = crossbeam_channel::bounded(0);
         let mut thread_handles = Vec::with_capacity(threads);
         for _ in 0..threads - 1 {
             thread_handles.push(std::thread::spawn(thread_fn(
@@ -62,7 +61,7 @@ impl ParallelCompressor {
         }
     }
 
-    pub fn compress(&self, data: Vec<u8>) -> impl Future<Output = io::Result<Response>> {
+    pub fn compress(&self, data: Vec<u8>) -> impl Future<Output = Response> {
         let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
@@ -72,7 +71,9 @@ impl ParallelCompressor {
 
         self.sender.send(request).unwrap();
 
-        rx.map(Result::unwrap)
+        // Unwrap twice: Once to assert that the channel wasn't closed, and again because compression
+        // cannot fail: It can handle all input
+        rx.map(Result::unwrap).map(Result::unwrap)
     }
 
     pub fn decompress(
@@ -93,7 +94,10 @@ impl ParallelCompressor {
     }
 }
 
-fn thread_fn(rx: channel::Receiver<Request>, mut compressor: Compressor) -> impl FnOnce() {
+fn thread_fn(
+    rx: crossbeam_channel::Receiver<Request>,
+    mut compressor: Compressor,
+) -> impl FnOnce() {
     move || {
         for mut request in rx {
             let mut src = pool::attach_block(mem::take(&mut request.data));
@@ -156,8 +160,7 @@ mod tests {
             let response1 = compressor.compress(duplicate_data.clone());
             let response2 = compressor.compress(uncompressible.clone());
 
-            let (response1, response2) =
-                futures::join!(response1.map(Result::unwrap), response2.map(Result::unwrap));
+            let (response1, response2) = futures::join!(response1, response2);
 
             assert!(response1.compressed);
             assert!(response1.data.len() < duplicate_data.len());

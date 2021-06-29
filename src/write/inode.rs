@@ -38,7 +38,7 @@ impl Table {
         unimplemented!()
     }
 
-    async fn write_basic_dir(&mut self, common: &Common, data: &DirData) -> io::Result<()> {
+    async fn write_basic_dir(&mut self, common: &Common, data: &DirData) {
         let body = repr::inode::BasicDir {
             dir_block_start: data.dir_ref.block_start(),
             // Note that for historical reasons, the hard link count of a directory includes
@@ -54,10 +54,10 @@ impl Table {
             parent_inode_number: data.parent_inode_num,
         };
 
-        self.writer.write(&body).await
+        self.writer.write(&body).await;
     }
 
-    async fn write_ext_dir(&mut self, common: &Common, data: &DirData) -> io::Result<()> {
+    async fn write_ext_dir(&mut self, common: &Common, data: &DirData) {
         let body = repr::inode::ExtendedDir {
             hard_link_count: repr::inode::dir_hardlink_count(
                 common.hardlink_count,
@@ -74,7 +74,7 @@ impl Table {
             xattr_idx: common.xattr_idx,
         };
 
-        self.writer.write(&body).await
+        self.writer.write(&body).await;
     }
 }
 

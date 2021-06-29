@@ -3,7 +3,7 @@ use crate::write::metablock_writer::MetablockWriter;
 use futures::{Stream, StreamExt};
 use std::convert::TryInto;
 use std::sync::Arc;
-use std::{cmp, io, mem};
+use std::{cmp, mem};
 use zerocopy::AsBytes;
 
 pub struct DirectoryInfo {
@@ -38,33 +38,30 @@ impl Table {
         }
     }
 
-    pub async fn dir(
-        &mut self,
-        mut contents: impl Stream<Item = Entry> + Unpin,
-    ) -> io::Result<DirectoryInfo> {
+    pub async fn dir(&mut self, mut contents: impl Stream<Item = Entry> + Unpin) -> DirectoryInfo {
         let start_size = self.total_size;
 
         let mut builder = self.start_dir();
         let mut header_refs = Vec::new();
 
         while let Some(item) = contents.next().await {
-            if let Some(header_ref) = builder.add_entry(item).await? {
+            if let Some(header_ref) = builder.add_entry(item).await {
                 header_refs.push(header_ref);
             }
         }
 
-        builder.flush().await?;
+        builder.flush().await;
         drop(builder);
 
         let end_size = self.total_size;
-        Ok(DirectoryInfo {
+        DirectoryInfo {
             header_refs,
             uncompressed_size: (end_size - start_size).try_into().unwrap(),
-        })
+        }
     }
 
-    pub async fn finish(self) -> io::Result<(usize, Vec<u8>)> {
-        Ok((self.total_size, self.writer.finish().await?))
+    pub async fn finish(self) -> (usize, Vec<u8>) {
+        (self.total_size, self.writer.finish().await)
     }
 }
 
@@ -94,14 +91,14 @@ const MIN_INODE_NUM_REF: repr::inode::Idx = repr::inode::Idx(i16::MIN.unsigned_a
 
 impl DirBuilder<'_> {
     /// Add a dir entry, returning the header pos, if this required a new header
-    pub async fn add_entry(&mut self, entry: Entry) -> io::Result<Option<repr::directory::Ref>> {
+    pub async fn add_entry(&mut self, entry: Entry) -> Option<repr::directory::Ref> {
         let need_header = self.crossed_metablock
             || self.header.count >= 256
             || self.header.start != entry.inode.block_start()
             || inode_diff(self.header.inode_number, entry.inode_num).is_none();
 
         let header_pos = if need_header {
-            self.flush().await?;
+            self.flush().await;
             self.header.start = entry.inode.block_start();
 
             // Don't set the reference num lower than a ref num which can go all the way to zero
@@ -129,18 +126,18 @@ impl DirBuilder<'_> {
         if current_metablock != prev_metablock {
             self.crossed_metablock = true;
         }
-        Ok(header_pos)
+        header_pos
     }
 
     fn total_size(&self) -> usize {
         self.table.total_size + mem::size_of_val(&self.header) + self.entries.len()
     }
 
-    async fn flush(&mut self) -> io::Result<()> {
+    async fn flush(&mut self) {
         if self.header.count != 0 {
             self.table.total_size = self.total_size();
-            self.table.writer.write(&self.header).await?;
-            self.table.writer.write_raw(&self.entries).await?;
+            self.table.writer.write(&self.header).await;
+            self.table.writer.write_raw(&self.entries).await;
 
             self.entries.clear();
             self.header = repr::directory::Header {
@@ -150,8 +147,6 @@ impl DirBuilder<'_> {
             };
             self.crossed_metablock = false;
         }
-
-        Ok(())
     }
 }
 
@@ -173,9 +168,9 @@ mod tests {
                 inode_kind: repr::inode::Kind::BASIC_FILE,
                 name: format!("b{:03}", i).into_bytes(),
             });
-            let header_refs = table.dir(futures::stream::iter(entries)).await.unwrap();
+            let header_refs = table.dir(futures::stream::iter(entries)).await;
 
-            let (uncompressed_size, data) = table.finish().await.unwrap();
+            let (uncompressed_size, data) = table.finish().await;
             assert!(data.len() < uncompressed_size);
         });
     }

@@ -1,8 +1,8 @@
 use crate::compress_threads::ParallelCompressor;
 use crate::pool;
 use std::convert::TryInto;
+use std::mem;
 use std::sync::Arc;
-use std::{io, mem};
 use zerocopy::AsBytes;
 
 pub struct MetablockWriter {
@@ -27,40 +27,37 @@ impl MetablockWriter {
         )
     }
 
-    pub async fn write<T: AsBytes>(&mut self, item: &T) -> io::Result<()> {
+    pub async fn write<T: AsBytes>(&mut self, item: &T) {
         self.write_raw(item.as_bytes()).await
     }
 
-    pub async fn write_raw(&mut self, data: &[u8]) -> io::Result<()> {
+    pub async fn write_raw(&mut self, data: &[u8]) {
         let remaining_len = repr::metablock::SIZE - self.current_block.len();
         if remaining_len < data.len() {
             let (head, tail) = data.split_at(remaining_len);
             self.current_block.extend_from_slice(head);
-            self.flush().await?;
+            self.flush().await;
             self.current_block.extend_from_slice(tail);
         } else {
             self.current_block.extend_from_slice(data);
         }
-        Ok(())
     }
 
-    pub async fn finish(mut self) -> io::Result<Vec<u8>> {
-        self.flush().await?;
-        Ok(mem::take(&mut self.output))
+    pub async fn finish(mut self) -> Vec<u8> {
+        self.flush().await;
+        mem::take(&mut self.output)
     }
 
-    async fn flush(&mut self) -> io::Result<()> {
+    async fn flush(&mut self) {
         if let Some(compressor) = &self.compressor {
             let block = mem::replace(&mut self.current_block, pool::block().detach());
-            let result = compressor.compress(block).await?;
+            let result = compressor.compress(block).await;
 
             Self::write_output(&mut self.output, &result.data, result.compressed);
         } else {
             Self::write_output(&mut self.output, &self.current_block, false);
             self.current_block.clear();
         }
-
-        Ok(())
     }
 
     fn write_output(output: &mut Vec<u8>, data: &[u8], compressed: bool) {
@@ -102,20 +99,20 @@ mod tests {
             // Write 9 * 1000 bytes so the next one will start in the second metablock
             for i in 0..9 {
                 let position = writer.position();
-                writer.write(&big_t).await.unwrap();
+                writer.write(&big_t).await;
                 assert_eq!(pos(position), (0, i * 1000));
             }
 
             // This will start in the second metablock. The first metablock should compress well
             let position = writer.position();
-            writer.write(&big_t).await.unwrap();
+            writer.write(&big_t).await;
             assert!((1..400).contains(&position.block_start()));
             assert_eq!(
                 usize::from(position.start_offset()),
                 (9 * 1000) % repr::metablock::SIZE
             );
 
-            let result = writer.finish().await.unwrap();
+            let result = writer.finish().await;
         });
     }
 }
