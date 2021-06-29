@@ -1,6 +1,8 @@
 mod dir;
 mod inode;
 mod metablock_writer;
+mod two_level;
+mod uid_gid;
 
 use chrono::{DateTime, Utc};
 use positioned_io::RandomAccessFile;
