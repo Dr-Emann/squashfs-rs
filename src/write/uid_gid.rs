@@ -1,6 +1,7 @@
 use crate::compress_threads::ParallelCompressor;
 use crate::write::metablock_writer::MetablockWriter;
 use crate::write::two_level;
+use byteorder::{LittleEndian, WriteBytesExt};
 use std::collections::HashMap;
 use std::io;
 use std::sync::Arc;
@@ -29,5 +30,26 @@ impl Table {
         self.known_ids.insert(id, idx);
         self.ids.push(id);
         idx
+    }
+
+    pub async fn write_at<W: io::Write>(
+        &mut self,
+        mut writer: W,
+        start_offset: u64,
+        compressor: Option<Arc<ParallelCompressor>>,
+    ) -> io::Result<()> {
+        let mut table = two_level::Table::with_capacity(compressor, self.ids.len());
+        for id in &self.ids {
+            table.write(id).await;
+        }
+        let (data_table, indexes) = table.finish().await;
+
+        writer.write_all(&data_table)?;
+        for &idx in &indexes {
+            let block_offset = start_offset + u64::from(idx);
+            writer.write_all(&block_offset.to_le_bytes())?;
+        }
+
+        unimplemented!()
     }
 }

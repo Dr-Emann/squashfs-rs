@@ -13,9 +13,13 @@ pub struct MetablockWriter {
 
 impl MetablockWriter {
     pub fn new(compressor: Option<Arc<ParallelCompressor>>) -> Self {
+        Self::with_capacity(compressor, 0)
+    }
+
+    pub fn with_capacity(compressor: Option<Arc<ParallelCompressor>>, cap: usize) -> Self {
         Self {
             compressor,
-            output: Vec::new(),
+            output: Vec::with_capacity(cap),
             current_block: pool::block().detach(),
         }
     }
