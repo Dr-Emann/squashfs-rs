@@ -34,7 +34,7 @@ pub struct Entry {
     pub _unused: u32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Idx(pub u32);
 

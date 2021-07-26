@@ -191,7 +191,7 @@ impl fmt::Display for Mode {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Time(pub u32);
 

@@ -5,6 +5,7 @@ use std::mem;
 use std::sync::Arc;
 use zerocopy::AsBytes;
 
+#[derive(Debug, Default)]
 pub struct MetablockWriter {
     compressor: Option<Arc<ParallelCompressor>>,
     output: Vec<u8>,

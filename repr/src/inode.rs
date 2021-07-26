@@ -2,7 +2,7 @@
 //!
 //! Metadata (ownership, permissions, etc) for items in the archive
 
-use crate::{uid_gid, xattr, Time};
+use crate::{datablock, fragment, uid_gid, xattr, Time};
 use std::fmt;
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
@@ -92,6 +92,9 @@ pub struct BasicDir {
     /// The number of hard links to this directory
     pub hard_link_count: u32,
     /// Total (uncompressed) size in bytes of the entries in the Directory Table, including headers
+    ///
+    /// This value is 3 bytes larger than the real listing. The Linux kernel creates "." and ".."
+    /// entries for offsets 0 and 1, and only after 3 looks into the listing, subtracting 3 from the size.
     pub file_size: u16,
     /// The (uncompressed) offset within the block in the Directory Table where the directory entry
     /// information starts
@@ -130,6 +133,11 @@ pub const fn dir_hardlink_count(hardlinks: u32, children: u32) -> u32 {
     hardlinks + 2 + children
 }
 
+/// Get the size of a
+pub const fn dir_stored_size(total_size: u32) -> u32 {
+    total_size + 3
+}
+
 /// A basic file inode structure
 ///
 /// This inode is followed by a list of `u32` block sizes.
@@ -146,7 +154,7 @@ pub struct BasicFile {
     /// fragment of this file is stored in.
     ///
     /// If this file does not end with a fragment, this should be 0xFFFFFFFF
-    pub fragment_block_index: u32,
+    pub fragment_block_index: fragment::Idx,
     /// The (uncompressed) offset within the fragment data block where the fragment for this file.
     ///
     /// Information about the fragment can be found at fragment_block_index.
@@ -168,7 +176,7 @@ pub struct BasicFile {
 #[repr(C, packed)]
 pub struct ExtendedFile {
     /// The offset from the start of the archive where the data blocks are stored
-    pub blocks_start: u64,
+    pub blocks_start: datablock::Ref,
     /// The (uncompressed) size of this file
     pub file_size: u64,
     /// The number of bytes saved by omitting blocks of zero bytes.
@@ -180,7 +188,7 @@ pub struct ExtendedFile {
     /// fragment of this file is stored in.
     ///
     /// If this file does not end with a fragment, this should be 0xFFFFFFFF
-    pub fragment_block_index: u32,
+    pub fragment_block_index: fragment::Idx,
     /// The (uncompressed) offset within the fragment data block where the fragment for this file.
     ///
     /// Information about the fragment can be found at fragment_block_index.

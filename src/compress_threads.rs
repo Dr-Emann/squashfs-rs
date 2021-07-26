@@ -3,7 +3,7 @@ use crate::compression::Compressor;
 use futures::channel::oneshot;
 use futures::FutureExt;
 use std::future::Future;
-use std::{io, mem, thread};
+use std::{fmt, io, mem, thread};
 
 pub struct ParallelCompressor {
     // Destructors are run in top-down order, so this closes the sender before joining
@@ -135,6 +135,12 @@ fn thread_fn(
             };
             let _ = request.reply.send(response);
         }
+    }
+}
+
+impl fmt::Debug for ParallelCompressor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ParallelCompressor").finish_non_exhaustive()
     }
 }
 
