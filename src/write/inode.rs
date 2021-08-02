@@ -379,7 +379,6 @@ mod tests {
             );
 
             let data = table.finish().await;
-            eprintln!("{:x?}", data);
             assert_eq!(
                 data,
                 concat!(
