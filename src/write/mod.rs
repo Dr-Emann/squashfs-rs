@@ -6,6 +6,7 @@ mod uid_gid;
 
 use chrono::{DateTime, Utc};
 use positioned_io::RandomAccessFile;
+use std::io::Write;
 use std::path::Path;
 use std::{fmt, mem, ptr};
 use std::{fs, io};
@@ -15,14 +16,15 @@ use bstr::BString;
 use crate::config::FragmentMode;
 use crate::shared_position_file::{Positioned, SharedWriteAt};
 
+use crate::compress_threads::ParallelCompressor;
 use crate::compression;
 use crate::compression::Compressor;
 use crate::errors::Result;
 use crate::Mode;
 use slog::Logger;
-use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
+use std::sync::Arc;
 use thread_local::ThreadLocal;
 use zerocopy::AsBytes;
 
@@ -33,12 +35,16 @@ pub struct Archive {
     file: Box<dyn SharedWriteAt>,
     mtime: DateTime<Utc>,
     block_size: u32,
-    compression: ThreadLocal<RefCell<Compressor>>,
-    compression_base: Compressor,
+    compression: Arc<ParallelCompressor>,
+
     flags: repr::superblock::Flags,
     items: Vec<Item>,
     root: ItemRef,
-    uid_gid: BTreeSet<repr::uid_gid::Id>,
+
+    inodes: inode::Table,
+    dir_table: dir::Table,
+    uid_gids: uid_gid::Table,
+
     logger: Logger,
 }
 
@@ -246,8 +252,8 @@ impl Archive {
     }
 
     fn add_item(&mut self, item: Item) -> ItemRef {
-        self.uid_gid.insert(item.uid);
-        self.uid_gid.insert(item.gid);
+        self.uid_gids.add(item.uid);
+        self.uid_gids.add(item.gid);
 
         let item_ref = ItemRef(self.items.len());
         self.items.push(item);
@@ -260,23 +266,16 @@ impl Archive {
     }
 
     pub fn flush(&mut self) -> Result<()> {
-        let all_ids: BTreeMap<repr::uid_gid::Id, repr::uid_gid::Idx> = self
-            .uid_gid
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(i, id)| (id, repr::uid_gid::Idx(i as u16)))
-            .collect();
         let mut superblock = repr::superblock::Superblock {
             magic: repr::superblock::MAGIC,
             inode_count: self.items.len().try_into().expect("too many items"),
             modification_time: date_time_to_mtime(self.mtime, &self.logger),
             block_size: self.block_size,
-            fragment_entry_count: 0, // TODO
-            compression_id: repr::compression::Id(self.compression_base.kind().id()),
+            fragment_entry_count: 0,                     // TODO
+            compression_id: repr::compression::Id::GZIP, // TODO
             block_log: self.block_size.trailing_zeros() as _,
             flags: self.flags,
-            id_count: self.uid_gid.len().try_into().expect("too many ids"),
+            id_count: self.uid_gids.len(),
             version_major: repr::superblock::VERSION_MAJOR,
             version_minor: repr::superblock::VERSION_MINOR,
             root_inode_ref: repr::inode::Ref::default(), // TODO
@@ -291,20 +290,7 @@ impl Archive {
         // TODO: data blocks? compression_options
         superblock.inode_table_start = mem::size_of_val(&superblock).try_into().unwrap();
 
-        let writer = Positioned::with_position(&*self.file, superblock.inode_table_start);
-        let mut inode_table = Vec::new();
-        for (i, item) in self.items.drain(..).enumerate() {
-            let inode_kind = item.kind();
-            let header = repr::inode::Header {
-                inode_type: inode_kind,
-                permissions: item.mode,
-                uid_idx: *all_ids.get(&item.uid).unwrap(),
-                gid_idx: *all_ids.get(&item.gid).unwrap(),
-                modified_time: date_time_to_mtime(item.mtime, &self.logger),
-                inode_number: repr::inode::Idx(i as _),
-            };
-            repr::write(&mut inode_table, &header)?;
-        }
+        let mut writer = Positioned::with_position(&*self.file, superblock.inode_table_start);
 
         self.file.write_all_at(&superblock.as_bytes(), 0)?;
         unimplemented!();
@@ -322,7 +308,7 @@ impl fmt::Debug for Archive {
         f.debug_struct("Archive")
             .field("items", &self.items)
             .field("root", &self.root)
-            .field("uid_gid", &self.uid_gid)
+            .field("uid_gid", &self.uid_gids)
             .field("mtime", &self.mtime)
             .field("block_size", &self.block_size)
             .field("compression", &self.compression)
@@ -404,15 +390,30 @@ impl ArchiveBuilder {
 
         let modification_time = date_time_to_mtime(self.modified_time, &logger);
 
+        let compression = Arc::new(ParallelCompressor::new(Compressor::new(
+            self.compressor_kind,
+        )));
+        let compression_or_none = |use_compressor: bool| {
+            if use_compressor {
+                Some(Arc::clone(&compression))
+            } else {
+                None
+            }
+        };
+        let inodes = inode::Table::new(compression_or_none(self.compressed_inodes));
+        let dir_table = dir::Table::new(compression_or_none(self.compressed_inodes));
+        let uid_gids = uid_gid::Table::new();
         Archive {
             file: writer,
             mtime: self.modified_time,
             block_size: self.block_size,
-            compression: ThreadLocal::new(),
-            compression_base: Compressor::new(self.compressor_kind),
+            compression,
             root: ItemRef(usize::MAX),
+            inodes,
+            dir_table,
+            uid_gids,
             items: Vec::new(),
-            uid_gid: BTreeSet::new(),
+
             flags: repr::superblock::Flags::default(),
             logger,
         }

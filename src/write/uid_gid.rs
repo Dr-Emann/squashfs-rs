@@ -1,9 +1,11 @@
 use crate::compress_threads::ParallelCompressor;
 use crate::write::two_level;
 use indexmap::IndexSet;
+use std::convert::TryInto;
 use std::io;
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub struct Table {
     ids: IndexSet<repr::uid_gid::Id>,
 }
@@ -19,6 +21,16 @@ impl Table {
         let (idx, _) = self.ids.insert_full(id);
 
         repr::uid_gid::Idx(idx as u16)
+    }
+
+    pub fn len(&self) -> u16 {
+        let len = self.ids.len();
+        len.try_into().unwrap()
+    }
+
+    pub fn get(&self, id: repr::uid_gid::Id) -> repr::uid_gid::Idx {
+        let idx = self.ids.get_index_of(&id).unwrap();
+        repr::uid_gid::Idx(idx.try_into().unwrap())
     }
 
     pub async fn write_at<W: io::Write>(
@@ -39,6 +51,6 @@ impl Table {
             writer.write_all(&block_offset.to_le_bytes())?;
         }
 
-        unimplemented!()
+        Ok(())
     }
 }

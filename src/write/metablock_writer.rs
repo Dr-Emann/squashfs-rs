@@ -91,8 +91,10 @@ mod tests {
             data: [u8; 1000],
         }
 
-        let compressor =
-            ParallelCompressor::new(1, Compressor::new(crate::compression::Kind::default()));
+        let compressor = ParallelCompressor::with_threads(
+            Compressor::new(crate::compression::Kind::default()),
+            1,
+        );
         let compressor = Arc::new(compressor);
 
         let mut writer = MetablockWriter::new(Some(compressor));

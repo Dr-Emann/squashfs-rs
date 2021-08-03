@@ -156,9 +156,9 @@ mod tests {
 
     #[test]
     fn simple() {
-        let compressor = ParallelCompressor::new(
-            1,
+        let compressor = ParallelCompressor::with_threads(
             crate::compression::Compressor::new(crate::compression::Kind::default()),
+            1,
         );
         let mut table = Table::new(Some(Arc::new(compressor)));
         futures::executor::block_on(async {

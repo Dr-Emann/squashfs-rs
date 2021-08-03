@@ -42,7 +42,11 @@ impl Drop for ThreadJoiner {
 }
 
 impl ParallelCompressor {
-    pub fn new(threads: usize, compressor: Compressor) -> Self {
+    pub fn new(compressor: Compressor) -> Self {
+        Self::with_threads(compressor, num_cpus::get())
+    }
+
+    pub fn with_threads(compressor: Compressor, threads: usize) -> Self {
         assert!(threads > 0);
 
         let (tx, rx) = crossbeam_channel::bounded(0);
@@ -162,7 +166,8 @@ mod tests {
 
             let uncompressible = vec![1];
 
-            let compressor = ParallelCompressor::new(2, Compressor::new(compression::Kind::ZLib));
+            let compressor =
+                ParallelCompressor::with_threads(Compressor::new(compression::Kind::ZLib), 2);
             let response1 = compressor.compress(duplicate_data.clone());
             let response2 = compressor.compress(uncompressible.clone());
 
