@@ -33,6 +33,20 @@ use zerocopy::AsBytes;
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
 const MODE_DEFAULT_FILE: Mode = Mode::O644;
 
+pub trait ReadHoles: io::Read {
+    /// Try to skip a hole in the file
+    ///
+    /// A hole is an area of all zeros. See [`lseek`][1]'s `SEEK_DATA`.
+    /// 
+    /// If this returns an error of kind ErrorKind::Unsupported, it is likely it always will.
+    /// All other errors should be treated as real IO errors
+    ///
+    /// [1]: https://man7.org/linux/man-pages/man2/lseek.2.html
+    fn skip_hole(&mut self) -> io::Result<u64> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+}
+
 pub struct Archive {
     file: Box<dyn SharedWriteAt>,
     mtime: DateTime<Utc>,

@@ -38,3 +38,7 @@ impl Table {
         self.inner.finish()
     }
 }
+
+pub (crate) struct BlockBuilder {
+    
+}

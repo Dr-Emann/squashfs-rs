@@ -10,6 +10,7 @@ pub struct Size(pub u32);
 
 impl Size {
     pub const UNCOMPRESSED_FLAG: u32 = 1 << 24;
+    pub const ZERO: Size = Size(0);
 
     pub fn new(mut size: u32, uncompressed: bool) -> Self {
         assert!(size <= (1 << 20));

@@ -1,8 +1,8 @@
 use super::metablock_writer::MetablockWriter;
 use crate::compress_threads::ParallelCompressor;
 use std::marker::PhantomData;
-use std::mem;
 use std::sync::Arc;
+use std::{fmt, mem};
 use zerocopy::AsBytes;
 
 pub struct Table<T> {
@@ -43,4 +43,29 @@ impl<T: AsBytes> Table<T> {
         let table_data = self.data_writer.finish().await;
         (table_data, self.index)
     }
+}
+
+impl<T> fmt::Debug for Table<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Table")
+            .field("data_writer", &self.data_writer)
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
+impl<T> Default for Table<T> {
+    fn default() -> Self {
+        Self {
+            data_writer: MetablockWriter::default(),
+            index: Vec::default(),
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Data {
+    body: Vec<u8>,
+    index: Vec<u32>,
 }
