@@ -120,4 +120,35 @@ mod tests {
             let result = writer.finish().await;
         });
     }
+
+    #[test]
+    fn giant() {
+        const GIANT_SIZE: usize = repr::metablock::SIZE * 3 + 1;
+        #[derive(AsBytes)]
+        #[repr(C)]
+        struct GiantT {
+            data: [u8; GIANT_SIZE],
+        }
+
+        let mut writer = MetablockWriter::new(None);
+
+        futures::executor::block_on(async {
+            let big_t = GiantT {
+                data: [0; GIANT_SIZE],
+            };
+            writer.write(&big_t).await;
+            let position = writer.position();
+            // This will start in the fourth metablock (3 metablocks before here). Each metablock has a u16 in front of it
+            assert_eq!(
+                u64::from(position.block_start()),
+                (3 * (2 + repr::metablock::SIZE)) as u64
+            );
+            assert_eq!(
+                position.start_offset(),
+                (GIANT_SIZE % repr::metablock::SIZE) as u16
+            );
+
+            let result = writer.finish().await;
+        });
+    }
 }

@@ -17,19 +17,21 @@
 
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
+use crate::datablock;
+
 /// Fragment block entry
 #[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Entry {
     /// The offset within the archive where the fragment block starts
-    pub start: u64,
+    pub start: datablock::Ref,
     /// This stores two pieces of information
     ///
     /// If the block is uncompressed, the `0x1000000` (`1<<24`) bit wil be set. The remaining bits
     /// describe the size of the fragment block on disk. Because the max value of block_size is
     /// 1 MiB (`1<<20`), and the size of a fragment block should be less than `block_size`, the
     /// uncompressed bit will never be set by the size.
-    pub size: Size,
+    pub size: datablock::Size,
     /// This field is unused
     pub _unused: u32,
 }
@@ -37,5 +39,3 @@ pub struct Entry {
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct Idx(pub u32);
-
-pub use crate::datablock::Size;
