@@ -11,6 +11,7 @@ pub mod shared_position_file;
 pub mod write;
 
 pub(crate) mod errors;
+mod thread;
 
 pub use repr::Mode;
 

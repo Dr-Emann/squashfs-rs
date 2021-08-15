@@ -1,14 +1,15 @@
 use super::pool;
 use crate::compression::Compressor;
+use crate::thread;
 use futures::channel::oneshot;
 use futures::FutureExt;
 use std::future::Future;
-use std::{fmt, io, mem, thread};
+use std::{fmt, io, mem};
 
 pub struct ParallelCompressor {
     // Destructors are run in top-down order, so this closes the sender before joining
     sender: crossbeam_channel::Sender<Request>,
-    threads: ThreadJoiner,
+    threads: crate::thread::Joiner<()>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -28,19 +29,6 @@ pub struct Response {
     pub compressed: bool,
 }
 
-struct ThreadJoiner(Vec<thread::JoinHandle<()>>);
-
-impl Drop for ThreadJoiner {
-    fn drop(&mut self) {
-        for t in self.0.drain(..) {
-            let res = t.join();
-            if !std::thread::panicking() {
-                res.unwrap();
-            }
-        }
-    }
-}
-
 impl ParallelCompressor {
     pub fn new(compressor: Compressor) -> Self {
         Self::with_threads(compressor, num_cpus::get())
@@ -50,17 +38,10 @@ impl ParallelCompressor {
         assert!(threads > 0);
 
         let (tx, rx) = crossbeam_channel::bounded(0);
-        let mut thread_handles = Vec::with_capacity(threads);
-        for _ in 0..threads - 1 {
-            thread_handles.push(std::thread::spawn(thread_fn(
-                rx.clone(),
-                compressor.clone(),
-            )));
-        }
-        thread_handles.push(std::thread::spawn(thread_fn(rx, compressor)));
+        let threads = thread::Joiner::new(threads, || thread_fn(rx.clone(), compressor.clone()));
 
         Self {
-            threads: ThreadJoiner(thread_handles),
+            threads,
             sender: tx,
         }
     }
