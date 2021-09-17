@@ -15,7 +15,7 @@ lz4 = []
 zstd = []
 
 [dependencies]
-positioned_io = { package = "positioned-io-preview", version = "0.3.3", path = "../positioned-io" }
+positioned_io = { package = "positioned-io-preview", version = "0.3.3", git = "https://github.com/Dr-Emann/positioned-io.git", branch = "write_at_shared_ref" }
 repr = { path = "repr" }
 
 bitflags = "1.2"
