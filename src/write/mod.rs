@@ -8,7 +8,6 @@ mod uid_gid;
 
 use chrono::{DateTime, Utc};
 use positioned_io::RandomAccessFile;
-use std::io::Write;
 use std::path::Path;
 use std::{fmt, mem, ptr};
 use std::{fs, io};
@@ -24,10 +23,9 @@ use crate::compression::Compressor;
 use crate::errors::Result;
 use crate::Mode;
 use slog::Logger;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::sync::Arc;
-use thread_local::ThreadLocal;
 use zerocopy::AsBytes;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
@@ -306,9 +304,9 @@ impl Archive {
         // TODO: data blocks? compression_options
         superblock.inode_table_start = mem::size_of_val(&superblock).try_into().unwrap();
 
-        let mut writer = Positioned::with_position(&*self.file, superblock.inode_table_start);
+        let writer = Positioned::with_position(&*self.file, superblock.inode_table_start);
 
-        self.file.write_all_at(&superblock.as_bytes(), 0)?;
+        self.file.write_all_at(superblock.as_bytes(), 0)?;
         unimplemented!();
     }
 }
