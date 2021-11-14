@@ -1,4 +1,4 @@
-// mod datablocks;
+//mod datablocks;
 mod dir;
 mod fragments;
 mod inode;
@@ -35,7 +35,7 @@ pub trait ReadHoles: io::Read {
     /// Try to skip a hole in the file
     ///
     /// A hole is an area of all zeros. See [`lseek`][1]'s `SEEK_DATA`.
-    ///
+    /// 
     /// If this returns an error of kind ErrorKind::Unsupported, it is likely it always will.
     /// All other errors should be treated as real IO errors
     ///

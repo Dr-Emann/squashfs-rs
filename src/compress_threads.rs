@@ -12,37 +12,21 @@ pub struct ParallelCompressor {
     threads: crate::thread::Joiner<()>,
 }
 
+#[derive(Debug, Copy, Clone)]
 enum RequestType {
-    Compress {
-        with_compressed: Box<dyn FnOnce(CompressResult) + Send + 'static>,
-    },
-    Decompress {
-        with_decompressed: Box<dyn FnOnce(io::Result<pool::Block<'static>>) + Send + 'static>,
-        max_size: usize,
-    },
-}
-
-impl fmt::Debug for RequestType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RequestType::Compress { .. } => f.debug_struct("Compress").finish(),
-            RequestType::Decompress { max_size, .. } => f
-                .debug_struct("Decompress")
-                .field("max_size", max_size)
-                .finish(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct CompressResult {
-    pub data: pool::Block<'static>,
-    pub compressed: bool,
+    Compress,
+    Decompress { max_size: usize },
 }
 
 struct Request {
     data: Vec<u8>,
     request_type: RequestType,
+    reply: oneshot::Sender<io::Result<Response>>,
+}
+
+pub struct Response {
+    pub data: pool::Block<'static>,
+    pub compressed: bool,
 }
 
 impl ParallelCompressor {
@@ -62,53 +46,35 @@ impl ParallelCompressor {
         }
     }
 
-    pub fn compress<F: FnOnce(CompressResult) + Send + 'static>(&self, data: Vec<u8>, f: F) {
+    pub fn compress(&self, data: Vec<u8>) -> impl Future<Output = Response> {
+        let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
-            request_type: RequestType::Compress {
-                with_compressed: Box::new(f),
-            },
+            request_type: RequestType::Compress,
+            reply: tx,
         };
 
         self.sender.send(request).unwrap();
+
+        // Unwrap twice: Once to assert that the channel wasn't closed, and again because compression
+        // cannot fail: It can handle all input
+        rx.map(Result::unwrap).map(Result::unwrap)
     }
 
-    pub fn decompress<F: FnOnce(io::Result<pool::Block<'static>>) + Send + 'static>(
+    pub fn decompress(
         &self,
         data: Vec<u8>,
         max_size: usize,
-        f: F,
-    ) {
+    ) -> impl Future<Output = io::Result<Response>> {
+        let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
-            request_type: RequestType::Decompress {
-                with_decompressed: Box::new(f),
-                max_size,
-            },
+            request_type: RequestType::Decompress { max_size },
+            reply: tx,
         };
 
         self.sender.send(request).unwrap();
-    }
 
-    pub fn compress_fut(&self, data: Vec<u8>) -> impl Future<Output = CompressResult> {
-        let (tx, rx) = oneshot::channel();
-        self.compress(data, move |compress_result| {
-            // Ignore closed receiver
-            let _ = tx.send(compress_result);
-        });
-        rx.map(Result::unwrap)
-    }
-
-    pub fn decompress_fut(
-        &self,
-        max_size: usize,
-        data: Vec<u8>,
-    ) -> impl Future<Output = io::Result<pool::Block<'static>>> {
-        let (tx, rx) = oneshot::channel();
-        self.decompress(data, max_size, move |maybe_block| {
-            // Ignore closed receiver
-            let _ = tx.send(maybe_block);
-        });
         rx.map(Result::unwrap)
     }
 }
@@ -120,44 +86,39 @@ fn thread_fn(
     move || {
         for mut request in rx {
             let mut src = pool::attach_block(mem::take(&mut request.data));
-            let mut dst = pool::block();
-            match request.request_type {
-                RequestType::Compress { with_compressed } => {
-                    let compressed: bool;
+            let mut response = Response {
+                data: pool::block(),
+                compressed: false,
+            };
+            let response: io::Result<Response> = match request.request_type {
+                RequestType::Compress => {
                     // TODO: Profile if this should use unsafe set_len
                     // Set to 1 smaller, so compressing to an equal sized result will just be left uncompressed
-                    dst.resize(src.len() - 1, 0);
-                    match compressor.compress(&src, &mut dst) {
+                    response.data.resize(src.len() - 1, 0);
+                    match compressor.compress(&src, &mut response.data) {
                         Ok(n) => {
-                            dst.truncate(n);
-                            compressed = true;
+                            response.data.truncate(n);
+                            response.compressed = true;
+                            Ok(response)
                         }
                         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
-                            // dst should get request data, and we'll return the invalid response data to the pool (in src)
-                            mem::swap(&mut src, &mut dst);
-                            compressed = false;
+                            // result should get request data, and we'll return the invalid response data to the pool
+                            mem::swap(&mut src, &mut response.data);
+                            response.compressed = false;
+                            Ok(response)
                         }
-                        Err(e) => {
-                            panic!("compressor should not be able to have an error compressing")
-                        }
+                        Err(e) => Err(e),
                     }
-                    with_compressed(CompressResult {
-                        data: dst,
-                        compressed,
-                    });
                 }
-                RequestType::Decompress {
-                    with_decompressed,
-                    max_size,
-                } => {
-                    dst.resize(max_size, 0);
-                    let maybe_result = compressor.decompress(&src, &mut dst).map(|n| {
-                        dst.truncate(n);
-                        dst
-                    });
-                    with_decompressed(maybe_result);
+                RequestType::Decompress { max_size } => {
+                    response.data.resize(max_size, 0);
+                    compressor.decompress(&src, &mut response.data).map(|n| {
+                        response.data.truncate(n);
+                        response
+                    })
                 }
             };
+            let _ = request.reply.send(response);
         }
     }
 }
@@ -188,8 +149,8 @@ mod tests {
 
             let compressor =
                 ParallelCompressor::with_threads(Compressor::new(compression::Kind::ZLib), 2);
-            let response1 = compressor.compress_fut(duplicate_data.clone());
-            let response2 = compressor.compress_fut(uncompressible.clone());
+            let response1 = compressor.compress(duplicate_data.clone());
+            let response2 = compressor.compress(uncompressible.clone());
 
             let (response1, response2) = futures::join!(response1, response2);
 
