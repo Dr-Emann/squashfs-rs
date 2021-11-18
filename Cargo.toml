@@ -17,7 +17,9 @@ zstd = []
 [dependencies]
 positioned_io = { package = "positioned-io-preview", version = "0.3.3", git = "https://github.com/Dr-Emann/positioned-io.git", branch = "write_at_shared_ref" }
 repr = { path = "repr" }
+async_positioned_io = { path = "async_positioned_io" }
 
+async-trait = "0.1.51"
 bitflags = "1.2"
 bstr = "0.2"
 byteorder = "1.3"
@@ -29,6 +31,8 @@ slog-stdlog = "4.0"
 static_assertions = "1.1.0"
 thiserror = "1.0"
 thread_local = "1.0"
+tokio = { version = "1.13", features = ["full"] }
+tracing = "0.1"
 
 crossbeam-channel = "0.5"
 futures = "0.3"
