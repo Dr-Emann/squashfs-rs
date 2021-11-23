@@ -2,8 +2,6 @@ use super::pool;
 use crate::compression::Compressor;
 use crate::thread;
 use futures::channel::oneshot;
-use futures::FutureExt;
-use std::future::Future;
 use std::{fmt, io, mem};
 
 pub struct ParallelCompressor {
