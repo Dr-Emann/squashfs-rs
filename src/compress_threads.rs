@@ -8,7 +8,7 @@ use std::{fmt, io, mem};
 
 pub struct ParallelCompressor {
     // Destructors are run in top-down order, so this closes the sender before joining
-    sender: crossbeam_channel::Sender<Request>,
+    sender: flume::Sender<Request>,
     threads: crate::thread::Joiner<()>,
 }
 
@@ -37,7 +37,7 @@ impl ParallelCompressor {
     pub fn with_threads(compressor: Compressor, threads: usize) -> Self {
         assert!(threads > 0);
 
-        let (tx, rx) = crossbeam_channel::bounded(0);
+        let (tx, rx) = flume::bounded(0);
         let threads = thread::Joiner::new(threads, || thread_fn(rx.clone(), compressor.clone()));
 
         Self {
@@ -46,7 +46,7 @@ impl ParallelCompressor {
         }
     }
 
-    pub fn compress(&self, data: Vec<u8>) -> impl Future<Output = Response> {
+    pub async fn compress(&self, data: Vec<u8>) -> Response {
         let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
@@ -54,18 +54,14 @@ impl ParallelCompressor {
             reply: tx,
         };
 
-        self.sender.send(request).unwrap();
+        self.sender.send_async(request).await.unwrap();
 
         // Unwrap twice: Once to assert that the channel wasn't closed, and again because compression
         // cannot fail: It can handle all input
-        rx.map(Result::unwrap).map(Result::unwrap)
+        rx.await.unwrap().unwrap()
     }
 
-    pub fn decompress(
-        &self,
-        data: Vec<u8>,
-        max_size: usize,
-    ) -> impl Future<Output = io::Result<Response>> {
+    pub async fn decompress(&self, data: Vec<u8>, max_size: usize) -> io::Result<Response> {
         let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
@@ -73,16 +69,13 @@ impl ParallelCompressor {
             reply: tx,
         };
 
-        self.sender.send(request).unwrap();
+        self.sender.send_async(request).await.unwrap();
 
-        rx.map(Result::unwrap)
+        rx.await.unwrap()
     }
 }
 
-fn thread_fn(
-    rx: crossbeam_channel::Receiver<Request>,
-    mut compressor: Compressor,
-) -> impl FnOnce() {
+fn thread_fn(rx: flume::Receiver<Request>, mut compressor: Compressor) -> impl FnOnce() {
     move || {
         for mut request in rx {
             let mut src = pool::attach_block(mem::take(&mut request.data));
