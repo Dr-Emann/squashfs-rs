@@ -5,14 +5,13 @@ authors = ["Zachary Dremann <dremann@gmail.com>"]
 edition = "2018"
 
 [features]
-default = ["gzip"]
+default = ["gzip", "zstd"]
 
 gzip = ["flate2"]
 lzma = []
 lzo = []
 xz = []
 lz4 = []
-zstd = []
 
 [dependencies]
 positioned_io = { package = "positioned-io-preview", version = "0.3.3", git = "https://github.com/Dr-Emann/positioned-io.git", branch = "write_at_shared_ref" }
@@ -41,6 +40,7 @@ once_cell = "1.8"
 zerocopy = "0.6"
 
 flate2 = { version = "1.0", optional = true }
+zstd = { version = "0.9", optional = true }
 
 [dev-dependencies]
 sloggers = "2.0"

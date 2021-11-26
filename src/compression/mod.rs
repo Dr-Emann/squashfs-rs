@@ -1,9 +1,15 @@
-use crate::compression::gzip::Gzip;
 use repr::compression::Id as CompressionId;
 use std::{fmt, io};
 
 #[cfg(feature = "gzip")]
 pub mod gzip;
+#[cfg(feature = "gzip")]
+use self::gzip::Gzip;
+
+#[cfg(feature = "zstd")]
+pub mod zstd;
+#[cfg(feature = "zstd")]
+use self::zstd::Zstd;
 
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -21,6 +27,8 @@ pub enum Kind {
 pub enum Compressor {
     #[cfg(feature = "gzip")]
     Gzip(gzip::Gzip),
+    #[cfg(feature = "zstd")]
+    Zstd(zstd::Zstd),
 }
 
 impl Compressor {
@@ -28,6 +36,8 @@ impl Compressor {
         match kind {
             #[cfg(feature = "gzip")]
             Kind::ZLib => Compressor::Gzip(Default::default()),
+            #[cfg(feature = "zstd")]
+            Kind::Zstd => Compressor::Zstd(Default::default()),
             _ => panic!("Unsupported compressor kind {}", kind),
         }
     }
@@ -36,15 +46,19 @@ impl Compressor {
         let result = match kind {
             #[cfg(feature = "gzip")]
             Kind::ZLib => Compressor::Gzip(Gzip::configured(data)?),
+            #[cfg(feature = "zstd")]
+            Kind::Zstd => Compressor::Zstd(Zstd::configured(data)?),
             _ => panic!("Unsupported compressor kind {}", kind),
         };
         Ok(result)
     }
 
-    pub fn config(&self) -> impl fmt::Debug {
-        match *self {
+    pub fn config(&self) -> &dyn fmt::Debug {
+        match self {
             #[cfg(feature = "gzip")]
-            Compressor::Gzip(ref gzip) => gzip.config(),
+            Compressor::Gzip(gzip) => gzip.config(),
+            #[cfg(feature = "zstd")]
+            Compressor::Zstd(zstd) => zstd.config(),
         }
     }
 
@@ -52,6 +66,8 @@ impl Compressor {
         match self {
             #[cfg(feature = "gzip")]
             Compressor::Gzip(gzip) => gzip.compress(src, dst),
+            #[cfg(feature = "zstd")]
+            Compressor::Zstd(zstd) => zstd.compress(src, dst),
         }
     }
 
@@ -59,6 +75,8 @@ impl Compressor {
         match self {
             #[cfg(feature = "gzip")]
             Compressor::Gzip(gzip) => gzip.decompress(src, dst),
+            #[cfg(feature = "zstd")]
+            Compressor::Zstd(zstd) => zstd.decompress(src, dst),
         }
     }
 
@@ -66,6 +84,8 @@ impl Compressor {
         match *self {
             #[cfg(feature = "gzip")]
             Compressor::Gzip(_) => Kind::ZLib,
+            #[cfg(feature = "zstd")]
+            Compressor::Zstd(_) => Kind::Zstd,
         }
     }
 }
@@ -136,14 +156,29 @@ impl Kind {
     }
 }
 
+trait Codec: Default {
+    type Config: fmt::Debug;
+
+    fn with_config(config: Self::Config) -> Self
+    where
+        Self: Sized;
+
+    fn configured(options: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized;
+
+    fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
+    fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
+
+    fn config(&self) -> &Self::Config;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[cfg(feature = "gzip")]
-    #[test]
-    fn gzip_compressor() {
-        let mut c = gzip::Gzip::default();
+    fn round_trip<C: Codec>() {
+        let mut c = C::default();
         let src: &[u8] = b"11111111111111111111111111111111111c111";
         let mut dest = [0; 64];
         let mut clear_dest = vec![0u8; src.len()];
@@ -152,5 +187,32 @@ mod tests {
             .decompress(&dest[..dest_size], &mut clear_dest)
             .expect("decompression");
         assert_eq!(&src[..], &clear_dest[..clear_size]);
+    }
+
+    fn small_dst<C: Codec>() {
+        let mut c = C::default();
+        let src: &[u8] = b"11111111111111111111111111111111111c111";
+        let mut dest = [0; 1];
+        c.decompress(src, &mut dest)
+            .expect_err("cannot compress to 1 bytes");
+
+        let src: &[u8] = b"11111111111111111111111111111111111c111";
+        let mut dest = [0; 1];
+        c.compress(src, &mut dest)
+            .expect_err("cannot compress to 1 bytes");
+    }
+
+    #[cfg(feature = "gzip")]
+    #[test]
+    fn gzip_compressor() {
+        round_trip::<Gzip>();
+        small_dst::<Gzip>();
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn zstd_compressor() {
+        round_trip::<Zstd>();
+        small_dst::<Zstd>();
     }
 }

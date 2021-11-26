@@ -117,6 +117,14 @@ pub struct Zstd {
     pub compression_level: u32,
 }
 
+impl Default for Zstd {
+    fn default() -> Self {
+        Self {
+            compression_level: 15,
+        }
+    }
+}
+
 /// Compression options for the lzo compressor
 #[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]

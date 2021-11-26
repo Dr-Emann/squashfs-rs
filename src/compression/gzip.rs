@@ -1,3 +1,4 @@
+use crate::compression::Codec;
 use flate2::{FlushCompress, FlushDecompress};
 use std::io;
 
@@ -22,8 +23,13 @@ impl Clone for Gzip {
     }
 }
 
-impl Gzip {
-    fn with_config(config: Config) -> Self {
+impl Codec for Gzip {
+    type Config = Config;
+
+    fn with_config(config: Config) -> Self
+    where
+        Self: Sized,
+    {
         let level = flate2::Compression::new(config.compression_level);
         Self {
             config,
@@ -32,23 +38,10 @@ impl Gzip {
         }
     }
 
-    fn decompressor(&mut self) -> &mut flate2::Decompress {
-        let decompressor = &mut self.decompressor;
-        decompressor.reset(true);
-        decompressor
-    }
-
-    fn compressor(&mut self) -> &mut flate2::Compress {
-        let compressor = &mut self.compressor;
-        compressor.reset();
-        compressor
-    }
-
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn configured(options: &[u8]) -> io::Result<Self> {
+    fn configured(options: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let config: Config = repr::read(options)?;
         let compression_level = config.compression_level;
         if !(1..=9).contains(&compression_level) {
@@ -72,7 +65,7 @@ impl Gzip {
         })
     }
 
-    pub fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+    fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
         let compressor = self.compressor();
         loop {
             let in_offset = min_mem(compressor.total_in(), src.len());
@@ -91,7 +84,7 @@ impl Gzip {
         Ok(compressor.total_out() as usize)
     }
 
-    pub fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+    fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
         let decompressor = self.decompressor();
         loop {
             let in_offset = min_mem(decompressor.total_in(), src.len());
@@ -110,8 +103,26 @@ impl Gzip {
         Ok(decompressor.total_out() as usize)
     }
 
-    pub fn config(&self) -> Config {
-        self.config
+    fn config(&self) -> &Config {
+        &self.config
+    }
+}
+
+impl Gzip {
+    fn decompressor(&mut self) -> &mut flate2::Decompress {
+        let decompressor = &mut self.decompressor;
+        decompressor.reset(true);
+        decompressor
+    }
+
+    fn compressor(&mut self) -> &mut flate2::Compress {
+        let compressor = &mut self.compressor;
+        compressor.reset();
+        compressor
+    }
+
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
