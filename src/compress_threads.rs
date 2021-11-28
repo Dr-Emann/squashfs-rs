@@ -2,6 +2,8 @@ use super::pool;
 use crate::compression::Compressor;
 use crate::thread;
 use futures::channel::oneshot;
+use futures::FutureExt;
+use std::future::Future;
 use std::{fmt, io, mem};
 
 pub struct ParallelCompressor {
@@ -44,7 +46,7 @@ impl ParallelCompressor {
         }
     }
 
-    pub async fn compress(&self, data: Vec<u8>) -> Response {
+    pub async fn compress(&self, data: Vec<u8>) -> impl Future<Output = Response> {
         let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
@@ -56,10 +58,14 @@ impl ParallelCompressor {
 
         // Unwrap twice: Once to assert that the channel wasn't closed, and again because compression
         // cannot fail: It can handle all input
-        rx.await.unwrap().unwrap()
+        rx.map(Result::unwrap).map(Result::unwrap)
     }
 
-    pub async fn decompress(&self, data: Vec<u8>, max_size: usize) -> io::Result<Response> {
+    pub async fn decompress(
+        &self,
+        data: Vec<u8>,
+        max_size: usize,
+    ) -> impl Future<Output = io::Result<Response>> {
         let (tx, rx) = oneshot::channel();
         let request = Request {
             data,
@@ -69,7 +75,7 @@ impl ParallelCompressor {
 
         self.sender.send_async(request).await.unwrap();
 
-        rx.await.unwrap()
+        rx.map(Result::unwrap)
     }
 }
 
@@ -140,8 +146,8 @@ mod tests {
 
             let compressor =
                 ParallelCompressor::with_threads(Compressor::new(compression::Kind::ZLib), 2);
-            let response1 = compressor.compress(duplicate_data.clone());
-            let response2 = compressor.compress(uncompressible.clone());
+            let response1 = compressor.compress(duplicate_data.clone()).await;
+            let response2 = compressor.compress(uncompressible.clone()).await;
 
             let (response1, response2) = futures::join!(response1, response2);
 

@@ -55,6 +55,7 @@ impl MetablockWriter {
         if let Some(compressor) = &self.compressor {
             let block = mem::replace(&mut self.current_block, pool::block().detach());
             let result = compressor.compress(block).await;
+            let result = result.await;
 
             Self::write_output(&mut self.output, &result.data, result.compressed);
         } else {
