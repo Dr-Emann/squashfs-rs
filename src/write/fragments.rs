@@ -39,6 +39,4 @@ impl Table {
     }
 }
 
-pub (crate) struct BlockBuilder {
-    
-}
+pub(crate) struct BlockBuilder {}
