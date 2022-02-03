@@ -1,13 +1,13 @@
 use crate::compression::Codec;
 use std::{fmt, io};
-use zstd::block::{Compressor, Decompressor};
+use zstd::bulk::{Compressor, Decompressor};
 
 pub type Config = repr::compression::options::Zstd;
 
 pub struct Zstd {
     config: Config,
-    decompressor: Decompressor,
-    compressor: Compressor,
+    decompressor: Decompressor<'static>,
+    compressor: Compressor<'static>,
 }
 
 impl fmt::Debug for Zstd {
@@ -39,8 +39,8 @@ impl Codec for Zstd {
     {
         Self {
             config,
-            decompressor: Decompressor::new(),
-            compressor: Compressor::new(),
+            decompressor: Decompressor::new().unwrap(),
+            compressor: Compressor::new(config.compression_level as _).unwrap(),
         }
     }
 
@@ -60,8 +60,7 @@ impl Codec for Zstd {
     }
 
     fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> std::io::Result<usize> {
-        self.compressor
-            .compress_to_buffer(src, dst, self.config.compression_level as i32)
+        self.compressor.compress_to_buffer(src, dst)
     }
 
     fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> std::io::Result<usize> {
