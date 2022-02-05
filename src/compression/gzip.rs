@@ -1,72 +1,21 @@
-use crate::compression::Codec;
+use crate::compression::{CodecImpl, ConfigValue};
 use flate2::{FlushCompress, FlushDecompress};
 use std::io;
 
 pub type Config = repr::compression::options::Gzip;
 
 #[derive(Debug)]
-pub struct Gzip {
-    config: Config,
-    decompressor: flate2::Decompress,
-    compressor: flate2::Compress,
-}
+pub struct Gzip;
 
-impl Default for Gzip {
-    fn default() -> Self {
-        Self::with_config(Config::default())
-    }
-}
+#[derive(Debug)]
+pub struct GzipCompressor(flate2::Compress);
 
-impl Clone for Gzip {
-    fn clone(&self) -> Self {
-        Self::with_config(self.config)
-    }
-}
+#[derive(Debug)]
+pub struct GzipDecompressor(flate2::Decompress);
 
-impl Codec for Gzip {
-    type Config = Config;
-
-    fn with_config(config: Config) -> Self
-    where
-        Self: Sized,
-    {
-        let level = flate2::Compression::new(config.compression_level);
-        Self {
-            config,
-            decompressor: flate2::Decompress::new(true),
-            compressor: flate2::Compress::new(level, true),
-        }
-    }
-
-    fn configured(options: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        let config: Config = repr::read(options)?;
-        let compression_level = config.compression_level;
-        if !(1..=9).contains(&compression_level) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Invalid compression level ({})", compression_level),
-            ));
-        }
-        let window_size = config.window_size;
-        if !(9..=15).contains(&window_size) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Invalid window size ({})", window_size),
-            ));
-        }
-        let level = flate2::Compression::new(compression_level);
-        Ok(Self {
-            config,
-            compressor: flate2::Compress::new(level, true),
-            decompressor: flate2::Decompress::new(true),
-        })
-    }
-
+impl super::Compressor for GzipCompressor {
     fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
-        let compressor = self.compressor();
+        let compressor = &mut self.0;
         loop {
             let in_offset = min_mem(compressor.total_in(), src.len());
             let input = &src[in_offset..];
@@ -83,9 +32,11 @@ impl Codec for Gzip {
         }
         Ok(compressor.total_out() as usize)
     }
+}
 
+impl super::Decompressor for GzipDecompressor {
     fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
-        let decompressor = self.decompressor();
+        let decompressor = &mut self.0;
         loop {
             let in_offset = min_mem(decompressor.total_in(), src.len());
             let input = &src[in_offset..];
@@ -102,27 +53,87 @@ impl Codec for Gzip {
         }
         Ok(decompressor.total_out() as usize)
     }
+}
 
-    fn config(&self) -> &Config {
-        &self.config
+impl super::Config for Config {
+    fn set(&mut self, field: &str, value: &str) -> io::Result<()> {
+        match field {
+            "compression_level" => {
+                let value = value.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "Invalid compression_level")
+                })?;
+                self.compression_level = value;
+            }
+            "window_size" => {
+                let value = value.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "Invalid window_size")
+                })?;
+                self.window_size = value;
+            }
+            // TODO: strategies
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Unknown field {field}"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn key_values(&self) -> Vec<(&'static str, ConfigValue<'_>)> {
+        let Self {
+            compression_level,
+            window_size,
+            strategies,
+        } = *self;
+        vec![
+            (
+                "compression_level",
+                ConfigValue::Int(compression_level.into()),
+            ),
+            ("window_size", ConfigValue::Int(window_size.into())),
+            (
+                "strategies",
+                ConfigValue::String(format!("{:?}", strategies)),
+            ),
+        ]
     }
 }
 
-impl Gzip {
-    fn decompressor(&mut self) -> &mut flate2::Decompress {
-        let decompressor = &mut self.decompressor;
-        decompressor.reset(true);
-        decompressor
+impl CodecImpl for Gzip {
+    type Compressor = GzipCompressor;
+    type Decompressor = GzipDecompressor;
+    type Config = Config;
+
+    fn read_config(data: &[u8]) -> io::Result<Self::Config> {
+        let config: Config = repr::read(data)?;
+        let compression_level = config.compression_level;
+        if !(1..=9).contains(&compression_level) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid compression level ({})", compression_level),
+            ));
+        }
+        let window_size = config.window_size;
+        if !(9..=15).contains(&window_size) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid window size ({})", window_size),
+            ));
+        }
+        Ok(config)
     }
 
-    fn compressor(&mut self) -> &mut flate2::Compress {
-        let compressor = &mut self.compressor;
-        compressor.reset();
-        compressor
+    fn compressor(config: Self::Config) -> Self::Compressor {
+        GzipCompressor(flate2::Compress::new(
+            flate2::Compression::new(config.compression_level),
+            true,
+        ))
     }
 
-    pub fn new() -> Self {
-        Self::default()
+    fn decompressor(config: Self::Config) -> Self::Decompressor {
+        GzipDecompressor(flate2::Decompress::new(true))
     }
 }
 

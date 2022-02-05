@@ -1,5 +1,5 @@
 use super::pool;
-use crate::compression::Compressor;
+use crate::compression::AnyCodec;
 use crate::thread;
 use futures::channel::oneshot;
 use futures::FutureExt;
@@ -30,11 +30,11 @@ pub struct Response {
 }
 
 impl ParallelCompressor {
-    pub fn new(compressor: Compressor) -> Self {
+    pub fn new(compressor: AnyCodec) -> Self {
         Self::with_threads(compressor, num_cpus::get())
     }
 
-    pub fn with_threads(compressor: Compressor, threads: usize) -> Self {
+    pub fn with_threads(compressor: AnyCodec, threads: usize) -> Self {
         assert!(threads > 0);
 
         let (tx, rx) = flume::bounded(0);
@@ -79,7 +79,7 @@ impl ParallelCompressor {
     }
 }
 
-fn thread_fn(rx: flume::Receiver<Request>, mut compressor: Compressor) -> impl FnOnce() {
+fn thread_fn(rx: flume::Receiver<Request>, mut compressor: AnyCodec) -> impl FnOnce() {
     move || {
         for mut request in rx {
             let mut src = pool::attach_block(mem::take(&mut request.data));
@@ -129,7 +129,7 @@ impl fmt::Debug for ParallelCompressor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compression::{self, Compressor};
+    use crate::compression::{self, AnyCodec};
 
     #[test]
     fn multiple_requests() {
@@ -145,7 +145,7 @@ mod tests {
             let uncompressible = vec![1];
 
             let compressor =
-                ParallelCompressor::with_threads(Compressor::new(compression::Kind::ZLib), 2);
+                ParallelCompressor::with_threads(AnyCodec::new(compression::Kind::ZLib), 2);
             let response1 = compressor.compress(duplicate_data.clone()).await;
             let response2 = compressor.compress(uncompressible.clone()).await;
 

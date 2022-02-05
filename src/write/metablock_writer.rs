@@ -77,7 +77,7 @@ impl MetablockWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compression::Compressor;
+    use crate::compression::AnyCodec;
     use zerocopy::AsBytes;
 
     fn pos(pos: repr::metablock::Ref) -> (u32, u16) {
@@ -92,10 +92,8 @@ mod tests {
             data: [u8; 1000],
         }
 
-        let compressor = ParallelCompressor::with_threads(
-            Compressor::new(crate::compression::Kind::default()),
-            1,
-        );
+        let compressor =
+            ParallelCompressor::with_threads(AnyCodec::new(crate::compression::Kind::default()), 1);
         let compressor = Arc::new(compressor);
 
         let mut writer = MetablockWriter::new(Some(compressor));

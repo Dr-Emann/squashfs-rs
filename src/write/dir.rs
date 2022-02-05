@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn simple() {
         let compressor = ParallelCompressor::with_threads(
-            crate::compression::Compressor::new(crate::compression::Kind::default()),
+            crate::compression::AnyCodec::new(crate::compression::Kind::default()),
             1,
         );
         let mut table = Table::new(Some(Arc::new(compressor)));

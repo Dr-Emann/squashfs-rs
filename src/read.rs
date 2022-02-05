@@ -1,5 +1,5 @@
 use crate::compression;
-use crate::compression::Compressor;
+use crate::compression::AnyCodec;
 use crate::errors::*;
 use crate::shared_position_file::Positioned;
 use byteorder::ReadBytesExt;
@@ -22,8 +22,8 @@ pub struct Archive<R> {
 struct ArchiveInner<R> {
     reader: R,
     superblock: repr::superblock::Superblock,
-    compressor_base: compression::Compressor,
-    compressor: ThreadLocal<RefCell<compression::Compressor>>,
+    compressor_base: compression::AnyCodec,
+    compressor: ThreadLocal<RefCell<compression::AnyCodec>>,
     logger: Logger,
 }
 
@@ -68,9 +68,9 @@ impl<R: ReadAt> Archive<R> {
         let compressor = if flags.contains(repr::superblock::Flags::COMPRESSOR_OPTIONS) {
             let mut options = [0; repr::metablock::SIZE];
             let size = read_metablock(&mut positioned, None, &mut options, false, &logger)?;
-            Compressor::configured(compressor_kind, &options[..size])?
+            AnyCodec::configured(compressor_kind, &options[..size])?
         } else {
-            Compressor::new(compressor_kind)
+            AnyCodec::new(compressor_kind)
         };
         slog::info!(logger, "Loaded compressor {:?}", compressor.config(); "compression_kind" => %compressor.kind());
 
@@ -171,7 +171,7 @@ fn validate_superblock(
 
 fn read_metablock<R: io::Read>(
     mut reader: R,
-    compressor: Option<&mut compression::Compressor>,
+    compressor: Option<&mut compression::AnyCodec>,
     dst: &mut [u8],
     exact: bool,
     logger: &Logger,

@@ -19,7 +19,7 @@ use crate::shared_position_file::{Positioned, SharedWriteAt};
 
 use crate::compress_threads::ParallelCompressor;
 use crate::compression;
-use crate::compression::Compressor;
+use crate::compression::AnyCodec;
 use crate::errors::Result;
 use crate::Mode;
 use slog::Logger;
@@ -404,9 +404,7 @@ impl ArchiveBuilder {
 
         let modification_time = date_time_to_mtime(self.modified_time, &logger);
 
-        let compression = Arc::new(ParallelCompressor::new(Compressor::new(
-            self.compressor_kind,
-        )));
+        let compression = Arc::new(ParallelCompressor::new(AnyCodec::new(self.compressor_kind)));
         let compression_or_none = |use_compressor: bool| {
             if use_compressor {
                 Some(Arc::clone(&compression))

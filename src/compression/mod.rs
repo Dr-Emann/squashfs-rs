@@ -3,13 +3,9 @@ use std::{fmt, io};
 
 #[cfg(feature = "gzip")]
 pub mod gzip;
-#[cfg(feature = "gzip")]
-use self::gzip::Gzip;
 
 #[cfg(feature = "zstd")]
 pub mod zstd;
-#[cfg(feature = "zstd")]
-use self::zstd::Zstd;
 
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -23,21 +19,77 @@ pub enum Kind {
     Unknown = 0,
 }
 
-#[derive(Debug, Clone)]
-pub enum Compressor {
-    #[cfg(feature = "gzip")]
-    Gzip(gzip::Gzip),
-    #[cfg(feature = "zstd")]
-    Zstd(zstd::Zstd),
+#[derive(Debug)]
+pub struct Codec<C: CodecImpl> {
+    config: C::Config,
+    comp: C::Compressor,
+    decomp: C::Decompressor,
 }
 
-impl Compressor {
-    pub fn new(kind: Kind) -> Compressor {
+impl<C: CodecImpl> Codec<C> {
+    fn new() -> Self {
+        Self {
+            config: Default::default(),
+            comp: C::compressor(Default::default()),
+            decomp: C::decompressor(Default::default()),
+        }
+    }
+
+    fn configured(data: &[u8]) -> io::Result<Self> {
+        let config = C::read_config(data)?;
+        Ok(Self::with_config(config))
+    }
+
+    fn with_config(config: C::Config) -> Self {
+        Self {
+            config: config.clone(),
+            comp: C::compressor(config.clone()),
+            decomp: C::decompressor(config),
+        }
+    }
+}
+
+impl<C: CodecImpl> Compressor for Codec<C> {
+    fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        self.comp.compress(src, dst)
+    }
+}
+
+impl<C: CodecImpl> Decompressor for Codec<C> {
+    fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        self.decomp.decompress(src, dst)
+    }
+}
+
+impl<C: CodecImpl> Clone for Codec<C>
+where
+    C::Config: Clone,
+{
+    fn clone(&self) -> Self {
+        let config = self.config.clone();
+        Self {
+            config: config.clone(),
+            comp: C::compressor(config.clone()),
+            decomp: C::decompressor(config),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum AnyCodec {
+    #[cfg(feature = "gzip")]
+    Gzip(Codec<gzip::Gzip>),
+    #[cfg(feature = "zstd")]
+    Zstd(Codec<zstd::Zstd>),
+}
+
+impl AnyCodec {
+    pub fn new(kind: Kind) -> AnyCodec {
         match kind {
             #[cfg(feature = "gzip")]
-            Kind::ZLib => Compressor::Gzip(Default::default()),
+            Kind::ZLib => AnyCodec::Gzip(Codec::new()),
             #[cfg(feature = "zstd")]
-            Kind::Zstd => Compressor::Zstd(Default::default()),
+            Kind::Zstd => AnyCodec::Zstd(Codec::new()),
             _ => panic!("Unsupported compressor kind {}", kind),
         }
     }
@@ -45,9 +97,9 @@ impl Compressor {
     pub fn configured(kind: Kind, data: &[u8]) -> io::Result<Self> {
         let result = match kind {
             #[cfg(feature = "gzip")]
-            Kind::ZLib => Compressor::Gzip(Gzip::configured(data)?),
+            Kind::ZLib => AnyCodec::Gzip(Codec::configured(data)?),
             #[cfg(feature = "zstd")]
-            Kind::Zstd => Compressor::Zstd(Zstd::configured(data)?),
+            Kind::Zstd => AnyCodec::Zstd(Codec::configured(data)?),
             _ => panic!("Unsupported compressor kind {}", kind),
         };
         Ok(result)
@@ -56,36 +108,36 @@ impl Compressor {
     pub fn config(&self) -> &dyn fmt::Debug {
         match self {
             #[cfg(feature = "gzip")]
-            Compressor::Gzip(gzip) => gzip.config(),
+            AnyCodec::Gzip(codec) => &codec.config,
             #[cfg(feature = "zstd")]
-            Compressor::Zstd(zstd) => zstd.config(),
+            AnyCodec::Zstd(codec) => &codec.config,
         }
     }
 
     pub fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
         match self {
             #[cfg(feature = "gzip")]
-            Compressor::Gzip(gzip) => gzip.compress(src, dst),
+            AnyCodec::Gzip(gzip) => gzip.comp.compress(src, dst),
             #[cfg(feature = "zstd")]
-            Compressor::Zstd(zstd) => zstd.compress(src, dst),
+            AnyCodec::Zstd(zstd) => zstd.comp.compress(src, dst),
         }
     }
 
     pub fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
         match self {
             #[cfg(feature = "gzip")]
-            Compressor::Gzip(gzip) => gzip.decompress(src, dst),
+            AnyCodec::Gzip(gzip) => gzip.decomp.decompress(src, dst),
             #[cfg(feature = "zstd")]
-            Compressor::Zstd(zstd) => zstd.decompress(src, dst),
+            AnyCodec::Zstd(zstd) => zstd.decomp.decompress(src, dst),
         }
     }
 
     pub fn kind(&self) -> Kind {
         match *self {
             #[cfg(feature = "gzip")]
-            Compressor::Gzip(_) => Kind::ZLib,
+            AnyCodec::Gzip(_) => Kind::ZLib,
             #[cfg(feature = "zstd")]
-            Compressor::Zstd(_) => Kind::Zstd,
+            AnyCodec::Zstd(_) => Kind::Zstd,
         }
     }
 }
@@ -156,29 +208,42 @@ impl Kind {
     }
 }
 
-trait Codec: Default {
-    type Config: fmt::Debug;
-
-    fn with_config(config: Self::Config) -> Self
-    where
-        Self: Sized;
-
-    fn configured(options: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized;
-
+pub trait Compressor {
     fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
-    fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
+}
 
-    fn config(&self) -> &Self::Config;
+pub trait Decompressor {
+    fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
+}
+
+pub trait Config: fmt::Debug + Default + Clone {
+    fn set(&mut self, field: &str, value: &str) -> io::Result<()>;
+
+    fn key_values(&self) -> Vec<(&'static str, ConfigValue<'_>)>;
+}
+
+pub enum ConfigValue<'a> {
+    Str(&'a str),
+    String(String),
+    Int(i64),
+}
+
+pub trait CodecImpl {
+    type Compressor: Compressor;
+    type Decompressor: Decompressor;
+    type Config: Config;
+
+    fn read_config(data: &[u8]) -> io::Result<Self::Config>;
+    fn compressor(config: Self::Config) -> Self::Compressor;
+    fn decompressor(config: Self::Config) -> Self::Decompressor;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn round_trip<C: Codec>() {
-        let mut c = C::default();
+    fn round_trip<C: CodecImpl>() {
+        let mut c = Codec::<C>::new();
         let src: &[u8] = b"11111111111111111111111111111111111c111";
         let mut dest = [0; 64];
         let mut clear_dest = vec![0u8; src.len()];
@@ -189,8 +254,8 @@ mod tests {
         assert_eq!(&src[..], &clear_dest[..clear_size]);
     }
 
-    fn small_dst<C: Codec>() {
-        let mut c = C::default();
+    fn small_dst<C: CodecImpl>() {
+        let mut c = Codec::<C>::new();
         let src: &[u8] = b"11111111111111111111111111111111111c111";
         let mut dest = [0; 1];
         c.decompress(src, &mut dest)
@@ -205,14 +270,14 @@ mod tests {
     #[cfg(feature = "gzip")]
     #[test]
     fn gzip_compressor() {
-        round_trip::<Gzip>();
-        small_dst::<Gzip>();
+        round_trip::<gzip::Gzip>();
+        small_dst::<gzip::Gzip>();
     }
 
     #[cfg(feature = "zstd")]
     #[test]
     fn zstd_compressor() {
-        round_trip::<Zstd>();
-        small_dst::<Zstd>();
+        round_trip::<zstd::Zstd>();
+        small_dst::<zstd::Zstd>();
     }
 }
