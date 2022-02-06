@@ -20,6 +20,45 @@ pub enum Kind {
 }
 
 #[derive(Debug)]
+pub enum CodecBuilder {
+    #[cfg(feature = "gzip")]
+    Gzip(gzip::Config),
+    #[cfg(feature = "zstd")]
+    Zstd(zstd::Config),
+}
+
+impl Config for CodecBuilder {
+    fn set(&mut self, field: &str, value: &str) -> io::Result<()> {
+        match self {
+            #[cfg(feature = "gzip")]
+            CodecBuilder::Gzip(config) => config.set(field, value),
+            #[cfg(feature = "zstd")]
+            CodecBuilder::Zstd(config) => config.set(field, value),
+        }
+    }
+
+    fn key_values(&self) -> Vec<(&'static str, ConfigValue<'_>)> {
+        match self {
+            #[cfg(feature = "gzip")]
+            CodecBuilder::Gzip(config) => config.key_values(),
+            #[cfg(feature = "zstd")]
+            CodecBuilder::Zstd(config) => config.key_values(),
+        }
+    }
+}
+
+impl CodecBuilder {
+    pub fn build(self) -> AnyCodec {
+        match self {
+            #[cfg(feature = "gzip")]
+            CodecBuilder::Gzip(config) => AnyCodec::Gzip(Codec::with_config(config)),
+            #[cfg(feature = "zstd")]
+            CodecBuilder::Zstd(config) => AnyCodec::Zstd(Codec::with_config(config)),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Codec<C: CodecImpl> {
     config: C::Config,
     comp: C::Compressor,
@@ -105,7 +144,7 @@ impl AnyCodec {
         Ok(result)
     }
 
-    pub fn config(&self) -> &dyn fmt::Debug {
+    pub fn config(&self) -> &dyn Config {
         match self {
             #[cfg(feature = "gzip")]
             AnyCodec::Gzip(codec) => &codec.config,
@@ -206,6 +245,18 @@ impl Kind {
             Kind::Unknown => false,
         }
     }
+
+    pub fn configure(self) -> CodecBuilder {
+        match self {
+            #[cfg(feature = "gzip")]
+            Kind::ZLib => CodecBuilder::Gzip(Default::default()),
+            #[cfg(feature = "zstd")]
+            Kind::Zstd => CodecBuilder::Zstd(Default::default()),
+            _ => {
+                panic!("Unsupported compression kind: {}", self.name());
+            }
+        }
+    }
 }
 
 pub trait Compressor {
@@ -216,7 +267,7 @@ pub trait Decompressor {
     fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
 }
 
-pub trait Config: fmt::Debug + Default + Clone {
+pub trait Config: fmt::Debug {
     fn set(&mut self, field: &str, value: &str) -> io::Result<()>;
 
     fn key_values(&self) -> Vec<(&'static str, ConfigValue<'_>)>;
@@ -231,7 +282,7 @@ pub enum ConfigValue<'a> {
 pub trait CodecImpl {
     type Compressor: Compressor;
     type Decompressor: Decompressor;
-    type Config: Config;
+    type Config: Config + Default + Clone;
 
     fn read_config(data: &[u8]) -> io::Result<Self::Config>;
     fn compressor(config: Self::Config) -> Self::Compressor;
