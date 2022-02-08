@@ -38,7 +38,7 @@ pub const BLOCK_SIZE_MAX: u32 = 1 << BLOCK_LOG_MAX as u32;
 pub const BLOCK_SIZE_DEFAULT: u32 = 1 << BLOCK_LOG_DEFAULT as u32;
 
 /// The header stored before a metadata block
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, AsBytes, FromBytes, Unaligned)]
 #[repr(C, packed)]
 pub struct MetablockHeader(pub u16);
 
@@ -78,14 +78,14 @@ bitflags! {
         const TYPE_FILE =   0o100_000;
         const TYPE_LINK =   0o120_000;
         const TYPE_SOCKET = 0o140_000;
-
     }
 }
 
 pub fn read<T: FromBytes, R: io::Read>(mut reader: R) -> io::Result<T> {
     let mut val: MaybeUninit<T> = MaybeUninit::uninit();
-    let slice =
-        unsafe { std::slice::from_raw_parts_mut(val.as_mut_ptr() as *mut u8, mem::size_of::<T>()) };
+    let slice = unsafe {
+        std::slice::from_raw_parts_mut(val.as_mut_ptr().cast::<u8>(), mem::size_of::<T>())
+    };
     reader.read_exact(slice)?;
     Ok(unsafe { val.assume_init() })
 }
@@ -94,11 +94,8 @@ pub fn write<T: AsBytes, W: io::Write>(mut writer: W, item: &T) -> io::Result<()
     writer.write_all(item.as_bytes())
 }
 
-pub fn from_bytes<T: FromBytes + Unaligned>(data: &[u8]) -> Option<&T> {
-    if data.len() < mem::size_of::<T>() {
-        return None;
-    }
-    Some(unsafe { &*data.as_ptr().cast::<T>() })
+pub fn from_bytes<T: FromBytes>(data: &[u8]) -> Option<zerocopy::LayoutVerified<&[u8], T>> {
+    zerocopy::LayoutVerified::new(data)
 }
 
 impl Mode {
