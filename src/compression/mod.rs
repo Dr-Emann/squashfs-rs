@@ -153,24 +153,6 @@ impl AnyCodec {
         }
     }
 
-    pub fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
-        match self {
-            #[cfg(feature = "gzip")]
-            AnyCodec::Gzip(gzip) => gzip.comp.compress(src, dst),
-            #[cfg(feature = "zstd")]
-            AnyCodec::Zstd(zstd) => zstd.comp.compress(src, dst),
-        }
-    }
-
-    pub fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
-        match self {
-            #[cfg(feature = "gzip")]
-            AnyCodec::Gzip(gzip) => gzip.decomp.decompress(src, dst),
-            #[cfg(feature = "zstd")]
-            AnyCodec::Zstd(zstd) => zstd.decomp.decompress(src, dst),
-        }
-    }
-
     pub fn kind(&self) -> Kind {
         match *self {
             #[cfg(feature = "gzip")]
@@ -178,6 +160,34 @@ impl AnyCodec {
             #[cfg(feature = "zstd")]
             AnyCodec::Zstd(_) => Kind::Zstd,
         }
+    }
+}
+
+impl Compressor for AnyCodec {
+    fn compress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        match self {
+            #[cfg(feature = "gzip")]
+            AnyCodec::Gzip(gzip) => gzip.comp.compress(src, dst),
+            #[cfg(feature = "zstd")]
+            AnyCodec::Zstd(zstd) => zstd.comp.compress(src, dst),
+        }
+    }
+}
+
+impl Decompressor for AnyCodec {
+    fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+        match self {
+            #[cfg(feature = "gzip")]
+            AnyCodec::Gzip(gzip) => gzip.decomp.decompress(src, dst),
+            #[cfg(feature = "zstd")]
+            AnyCodec::Zstd(zstd) => zstd.decomp.decompress(src, dst),
+        }
+    }
+}
+
+impl Default for AnyCodec {
+    fn default() -> Self {
+        Self::new(Kind::default())
     }
 }
 
@@ -265,6 +275,36 @@ pub trait Compressor {
 
 pub trait Decompressor {
     fn decompress(&mut self, src: &[u8], dst: &mut [u8]) -> io::Result<usize>;
+}
+
+fn copy(src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
+    let dst = dst
+        .get_mut(..src.len())
+        .ok_or_else(|| io::ErrorKind::WriteZero)?;
+    dst.copy_from_slice(src);
+    Ok(dst.len())
+}
+
+/// Return size, and true if compressed, false if not
+pub(crate) fn compress_or_copy<Comp: Compressor>(
+    comp: &mut Comp,
+    src: &[u8],
+    dst: &mut [u8],
+) -> (usize, bool) {
+    match comp.compress(src, dst) {
+        Ok(n) => {
+            tracing::trace!(
+                orig_size = src.len(),
+                compressed_size = n,
+                "Compressed block"
+            );
+            (n, true)
+        }
+        Err(err) => {
+            tracing::trace!(%err, "Unable to compress block");
+            (copy(src, dst).unwrap(), false)
+        }
+    }
 }
 
 pub trait Config: fmt::Debug {

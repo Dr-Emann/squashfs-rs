@@ -1,5 +1,5 @@
 use crate::compression;
-use crate::compression::AnyCodec;
+use crate::compression::{AnyCodec, Decompressor};
 use crate::errors::*;
 use crate::shared_position_file::Positioned;
 use byteorder::ReadBytesExt;

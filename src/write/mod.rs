@@ -17,18 +17,14 @@ use bstr::BString;
 use crate::config::FragmentMode;
 use crate::shared_position_file::{Positioned, SharedWriteAt};
 
-use crate::compress_threads::ParallelCompressor;
 use crate::compression;
-use crate::compression::AnyCodec;
 use crate::errors::Result;
 use crate::Mode;
 use slog::Logger;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use std::sync::Arc;
 
 use swiss_reader::SparseRead;
-use zerocopy::AsBytes;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
 const MODE_DEFAULT_FILE: Mode = Mode::O644;
@@ -37,14 +33,11 @@ pub struct Archive {
     file: Box<dyn SharedWriteAt>,
     mtime: DateTime<Utc>,
     block_size: u32,
-    compression: Arc<ParallelCompressor>,
 
     flags: repr::superblock::Flags,
     items: Vec<Item>,
     root: ItemRef,
 
-    inodes: inode::Table,
-    dir_table: dir::Table,
     uid_gids: uid_gid::Table,
 
     logger: Logger,
@@ -88,6 +81,8 @@ struct Item {
     mode: repr::Mode,
     mtime: DateTime<Utc>,
 
+    inode: Option<repr::inode::Ref>,
+
     // TODO: xattrs
     data: Data,
 }
@@ -98,13 +93,20 @@ impl Item {
 
         match self.data {
             Data::Directory { .. } => Kind::BASIC_DIR,
-            _ => unimplemented!(),
+            _ => todo!(),
+        }
+    }
+
+    pub(crate) fn children_refs(&self) -> Option<impl Iterator<Item = ItemRef> + '_> {
+        match &self.data {
+            Data::Directory { entries } => Some(entries.iter().map(|(_, &item_ref)| item_ref)),
+            _ => None,
         }
     }
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct ItemRef(usize);
+pub struct ItemRef(u32);
 
 #[derive(Debug, Clone)]
 enum Data {
@@ -180,6 +182,7 @@ impl DirBuilder {
             gid: self.gid,
             mode: self.mode,
             mtime: self.mtime,
+            inode: None,
             data: Data::Directory { entries },
         };
         mem::forget(self);
@@ -255,18 +258,18 @@ impl Archive {
     }
 
     fn get(&self, item_ref: ItemRef) -> &Item {
-        &self.items[item_ref.0]
+        &self.items[item_ref.0 as usize]
     }
 
     fn get_mut(&mut self, item_ref: ItemRef) -> &mut Item {
-        &mut self.items[item_ref.0]
+        &mut self.items[item_ref.0 as usize]
     }
 
     fn add_item(&mut self, item: Item) -> ItemRef {
         self.uid_gids.add(item.uid);
         self.uid_gids.add(item.gid);
 
-        let item_ref = ItemRef(self.items.len());
+        let item_ref = ItemRef(self.items.len().try_into().unwrap());
         self.items.push(item);
         item_ref
     }
@@ -303,8 +306,7 @@ impl Archive {
 
         let writer = Positioned::with_position(&*self.file, superblock.inode_table_start);
 
-        self.file.write_all_at(superblock.as_bytes(), 0)?;
-        unimplemented!();
+        todo!()
     }
 }
 
@@ -322,7 +324,6 @@ impl fmt::Debug for Archive {
             .field("uid_gid", &self.uid_gids)
             .field("mtime", &self.mtime)
             .field("block_size", &self.block_size)
-            .field("compression", &self.compression)
             .field("flags", &self.flags)
             .finish()
     }
@@ -401,25 +402,12 @@ impl ArchiveBuilder {
 
         let modification_time = date_time_to_mtime(self.modified_time, &logger);
 
-        let compression = Arc::new(ParallelCompressor::new(AnyCodec::new(self.compressor_kind)));
-        let compression_or_none = |use_compressor: bool| {
-            if use_compressor {
-                Some(Arc::clone(&compression))
-            } else {
-                None
-            }
-        };
-        let inodes = inode::Table::new(compression_or_none(self.compressed_inodes));
-        let dir_table = dir::Table::new(compression_or_none(self.compressed_inodes));
         let uid_gids = uid_gid::Table::new();
         Archive {
             file: writer,
             mtime: self.modified_time,
             block_size: self.block_size,
-            compression,
-            root: ItemRef(usize::MAX),
-            inodes,
-            dir_table,
+            root: ItemRef(u32::MAX),
             uid_gids,
             items: Vec::new(),
 

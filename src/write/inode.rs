@@ -1,9 +1,8 @@
 use super::metablock_writer::MetablockWriter;
-use crate::compress_threads::ParallelCompressor;
+use crate::compression::AnyCodec;
 use crate::Mode;
 use std::convert::TryInto;
 use std::io;
-use std::sync::Arc;
 
 #[derive(Debug, Default)]
 pub struct Table {
@@ -12,18 +11,18 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(compressor: Option<Arc<ParallelCompressor>>) -> Self {
+    pub fn new(compressor: Option<AnyCodec>) -> Self {
         Self {
             writer: MetablockWriter::new(compressor),
             count: 0,
         }
     }
 
-    pub async fn finish(self) -> Vec<u8> {
-        self.writer.finish().await
+    pub fn finish(self) -> Vec<u8> {
+        self.writer.finish()
     }
 
-    pub async fn add(&mut self, entry: Entry) -> io::Result<repr::inode::Ref> {
+    pub fn add(&mut self, entry: Entry) -> io::Result<repr::inode::Ref> {
         let result = self.writer.position();
 
         let extended = entry.needs_ext();
@@ -40,38 +39,38 @@ impl Table {
             inode_number,
         };
 
-        self.writer.write(&header).await;
+        self.writer.write(&header);
 
         let common = &entry.common;
 
         match &entry.data {
             Data::Directory(dir_data) => {
                 if !extended {
-                    self.write_basic_dir(common, dir_data).await;
+                    self.write_basic_dir(common, dir_data);
                 } else {
-                    self.write_ext_dir(common, dir_data).await;
+                    self.write_ext_dir(common, dir_data);
                 }
             }
             Data::File(file_data) => {
                 if !extended {
-                    self.write_basic_file(common, file_data).await;
+                    self.write_basic_file(common, file_data);
                 } else {
-                    self.write_ext_file(common, file_data).await;
+                    self.write_ext_file(common, file_data);
                 }
             }
-            Data::Symlink(symlink_data) => self.write_symlink(common, symlink_data).await,
+            Data::Symlink(symlink_data) => self.write_symlink(common, symlink_data),
             Data::BlockDev(dev_data) | Data::CharDev(dev_data) => {
                 if !extended {
-                    self.write_basic_device(common, dev_data).await;
+                    self.write_basic_device(common, dev_data);
                 } else {
-                    self.write_ext_device(common, dev_data).await;
+                    self.write_ext_device(common, dev_data);
                 }
             }
             Data::Fifo | Data::Socket => {
                 if !extended {
-                    self.write_basic_ipc(common).await;
+                    self.write_basic_ipc(common);
                 } else {
-                    self.write_ext_ipc(common).await;
+                    self.write_ext_ipc(common);
                 }
             }
         }
@@ -79,7 +78,7 @@ impl Table {
         Ok(result)
     }
 
-    async fn write_basic_dir(&mut self, common: &Common, data: &DirData) {
+    fn write_basic_dir(&mut self, common: &Common, data: &DirData) {
         let body = repr::inode::BasicDir {
             dir_block_start: data.dir_ref.block_start(),
             // Note that for historical reasons, the hard link count of a directory includes
@@ -97,10 +96,10 @@ impl Table {
             parent_inode_number: data.parent_inode_num,
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
     }
 
-    async fn write_ext_dir(&mut self, common: &Common, data: &DirData) {
+    fn write_ext_dir(&mut self, common: &Common, data: &DirData) {
         let body = repr::inode::ExtendedDir {
             hard_link_count: repr::inode::dir_hardlink_count(
                 common.hardlink_count,
@@ -117,12 +116,12 @@ impl Table {
             xattr_idx: common.xattr_idx,
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
 
         todo!("Need to write header locations")
     }
 
-    async fn write_basic_file(&mut self, common: &Common, data: &FileData) {
+    fn write_basic_file(&mut self, common: &Common, data: &FileData) {
         let body = repr::inode::BasicFile {
             blocks_start: data
                 .blocks_start
@@ -137,13 +136,13 @@ impl Table {
                 .expect("Should not make a basic file with a large file size"),
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
         for block_size in &data.block_sizes {
-            self.writer.write(block_size).await;
+            self.writer.write(block_size);
         }
     }
 
-    async fn write_ext_file(&mut self, common: &Common, data: &FileData) {
+    fn write_ext_file(&mut self, common: &Common, data: &FileData) {
         let body = repr::inode::ExtendedFile {
             blocks_start: data.blocks_start,
             fragment_block_index: data.fragment_block_idx,
@@ -154,60 +153,60 @@ impl Table {
             xattr_idx: common.xattr_idx,
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
         for block_size in &data.block_sizes {
-            self.writer.write(block_size).await;
+            self.writer.write(block_size);
         }
     }
 
-    async fn write_symlink(&mut self, common: &Common, data: &SymlinkData) {
+    fn write_symlink(&mut self, common: &Common, data: &SymlinkData) {
         let body = repr::inode::Symlink {
             hard_link_count: common.hardlink_count,
             target_size: data.target_path.len().try_into().unwrap(),
         };
 
-        self.writer.write(&body).await;
-        self.writer.write_raw(&data.target_path).await;
+        self.writer.write(&body);
+        self.writer.write_raw(&data.target_path);
 
         if common.xattr_idx.is_some() {
-            self.writer.write(&common.xattr_idx).await;
+            self.writer.write(&common.xattr_idx);
         }
     }
 
-    async fn write_basic_device(&mut self, common: &Common, data: &DeviceData) {
+    fn write_basic_device(&mut self, common: &Common, data: &DeviceData) {
         let body = repr::inode::BasicDevice {
             hard_link_count: common.hardlink_count,
             device: data.device,
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
     }
 
-    async fn write_ext_device(&mut self, common: &Common, data: &DeviceData) {
+    fn write_ext_device(&mut self, common: &Common, data: &DeviceData) {
         let body = repr::inode::ExtendedDevice {
             hard_link_count: common.hardlink_count,
             device: data.device,
             xattr_idx: common.xattr_idx,
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
     }
 
-    async fn write_basic_ipc(&mut self, common: &Common) {
+    fn write_basic_ipc(&mut self, common: &Common) {
         let body = repr::inode::BasicIpc {
             hard_link_count: common.hardlink_count,
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
     }
 
-    async fn write_ext_ipc(&mut self, common: &Common) {
+    fn write_ext_ipc(&mut self, common: &Common) {
         let body = repr::inode::ExtendedIpc {
             hard_link_count: common.hardlink_count,
             xattr_idx: common.xattr_idx,
         };
 
-        self.writer.write(&body).await;
+        self.writer.write(&body);
     }
 }
 
@@ -323,72 +322,70 @@ mod tests {
 
     #[test]
     fn add_entries() {
-        futures::executor::block_on(async {
-            let mut table = Table::new(None);
+        let mut table = Table::new(None);
 
-            let common = Common {
-                permissions: Default::default(),
-                uid_idx: repr::uid_gid::Idx(0),
-                gid_idx: repr::uid_gid::Idx(0),
-                modified_time: repr::Time(0),
-                hardlink_count: 1,
-                xattr_idx: repr::xattr::Idx::default(),
-                force_ext: false,
-            };
-            let entry = Entry {
-                common,
-                data: Data::Socket,
-            };
-            table.add(entry).await.unwrap();
+        let common = Common {
+            permissions: Default::default(),
+            uid_idx: repr::uid_gid::Idx(0),
+            gid_idx: repr::uid_gid::Idx(0),
+            modified_time: repr::Time(0),
+            hardlink_count: 1,
+            xattr_idx: repr::xattr::Idx::default(),
+            force_ext: false,
+        };
+        let entry = Entry {
+            common,
+            data: Data::Socket,
+        };
+        table.add(entry).unwrap();
 
-            let entry = Entry {
-                common,
-                data: Data::Symlink(SymlinkData {
-                    target_path: b"abcdef".to_vec(),
-                }),
-            };
-            let r = table.add(entry).await.unwrap();
-            assert_eq!(r.block_start(), 0);
-            // Size of base header + ipc
-            assert_eq!(
-                r.start_offset() as usize,
-                mem::size_of::<raw::Header>() + mem::size_of::<raw::BasicIpc>()
-            );
+        let entry = Entry {
+            common,
+            data: Data::Symlink(SymlinkData {
+                target_path: b"abcdef".to_vec(),
+            }),
+        };
+        let r = table.add(entry).unwrap();
+        assert_eq!(r.block_start(), 0);
+        // Size of base header + ipc
+        assert_eq!(
+            r.start_offset() as usize,
+            mem::size_of::<raw::Header>() + mem::size_of::<raw::BasicIpc>()
+        );
 
-            let entry = Entry {
-                common,
-                data: Data::File(FileData {
-                    blocks_start: repr::datablock::Ref(0),
-                    file_size: 10,
-                    sparse_bytes: 0,
-                    fragment_block_idx: Default::default(),
-                    fragment_offset: 0,
-                    block_sizes: vec![10],
-                }),
-            };
-            let r = table.add(entry).await.unwrap();
-            assert_eq!(r.block_start(), 0);
-            // Size of base header + file + 1 block size
-            assert_eq!(
-                r.start_offset() as usize,
-                mem::size_of::<raw::Header>()
-                    + mem::size_of::<raw::BasicIpc>()
-                    + mem::size_of::<raw::Header>()
-                    + mem::size_of::<raw::Symlink>()
-                    + 6 // target_path of "abcdef"
-            );
+        let entry = Entry {
+            common,
+            data: Data::File(FileData {
+                blocks_start: repr::datablock::Ref(0),
+                file_size: 10,
+                sparse_bytes: 0,
+                fragment_block_idx: Default::default(),
+                fragment_offset: 0,
+                block_sizes: vec![10],
+            }),
+        };
+        let r = table.add(entry).unwrap();
+        assert_eq!(r.block_start(), 0);
+        // Size of base header + file + 1 block size
+        assert_eq!(
+            r.start_offset() as usize,
+            mem::size_of::<raw::Header>()
+                + mem::size_of::<raw::BasicIpc>()
+                + mem::size_of::<raw::Header>()
+                + mem::size_of::<raw::Symlink>()
+                + 6 // target_path of "abcdef"
+        );
 
-            let data = table.finish().await;
-            assert_eq!(
-                data,
-                concat!(
-                    "\x56\0\x07\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0\x03\0\0\0",
-                    "\0\0\0\0\0\0\0\0\x01\0\0\0\x01\0\0\0\x06\0\0\0abcdef\x02\0\0",
-                    "\0\0\0\0\0\0\0\0\0\x02\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x0A\0\0",
-                    "\0\x0A\0\0\0",
-                )
-                .as_bytes()
-            );
-        });
+        let data = table.finish();
+        assert_eq!(
+            data,
+            concat!(
+                "\x56\0\x07\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x01\0\0\0\x03\0\0\0",
+                "\0\0\0\0\0\0\0\0\x01\0\0\0\x01\0\0\0\x06\0\0\0abcdef\x02\0\0",
+                "\0\0\0\0\0\0\0\0\0\x02\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x0A\0\0",
+                "\0\x0A\0\0\0",
+            )
+            .as_bytes()
+        );
     }
 }

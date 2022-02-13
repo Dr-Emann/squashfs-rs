@@ -1,5 +1,5 @@
 use super::pool;
-use crate::compression::AnyCodec;
+use crate::compression::{AnyCodec, Compressor, Decompressor};
 use crate::thread;
 use futures::channel::oneshot;
 use futures::FutureExt;

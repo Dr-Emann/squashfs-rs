@@ -1,7 +1,6 @@
 use super::metablock_writer::MetablockWriter;
-use crate::compress_threads::ParallelCompressor;
+use crate::compression::AnyCodec;
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::{fmt, mem};
 use zerocopy::AsBytes;
 
@@ -12,11 +11,11 @@ pub struct Table<T> {
 }
 
 impl<T: AsBytes> Table<T> {
-    pub fn new(compressor: Option<Arc<ParallelCompressor>>) -> Self {
+    pub fn new(compressor: Option<AnyCodec>) -> Self {
         Self::with_capacity(compressor, 0)
     }
 
-    pub fn with_capacity(compressor: Option<Arc<ParallelCompressor>>, cap: usize) -> Self {
+    pub fn with_capacity(compressor: Option<AnyCodec>, cap: usize) -> Self {
         assert_eq!(repr::metablock::SIZE % mem::size_of::<T>(), 0);
         assert!(mem::size_of::<T>() < repr::metablock::SIZE);
 
@@ -30,8 +29,8 @@ impl<T: AsBytes> Table<T> {
         }
     }
 
-    pub async fn write(&mut self, item: &T) {
-        self.data_writer.write(item).await;
+    pub fn write(&mut self, item: &T) {
+        self.data_writer.write(item);
         let position = self.data_writer.position();
         if position.start_offset() == 0 {
             self.index.push(position.block_start());
@@ -39,8 +38,8 @@ impl<T: AsBytes> Table<T> {
     }
 
     // Return (table data, index data)
-    pub async fn finish(self) -> (Vec<u8>, Vec<u32>) {
-        let table_data = self.data_writer.finish().await;
+    pub fn finish(self) -> (Vec<u8>, Vec<u32>) {
+        let table_data = self.data_writer.finish();
         (table_data, self.index)
     }
 }

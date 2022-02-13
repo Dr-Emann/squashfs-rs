@@ -1,9 +1,8 @@
-use crate::compress_threads::ParallelCompressor;
+use crate::compression::AnyCodec;
 use crate::write::two_level;
 use indexmap::IndexSet;
 use std::convert::TryInto;
 use std::io;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Table {
@@ -33,17 +32,17 @@ impl Table {
         repr::uid_gid::Idx(idx.try_into().unwrap())
     }
 
-    pub async fn write_at<W: io::Write>(
+    pub fn write_at<W: io::Write>(
         &mut self,
         mut writer: W,
         start_offset: u64,
-        compressor: Option<Arc<ParallelCompressor>>,
+        compressor: Option<AnyCodec>,
     ) -> io::Result<()> {
         let mut table = two_level::Table::with_capacity(compressor, self.ids.len());
         for id in &self.ids {
-            table.write(id).await;
+            table.write(id);
         }
-        let (data_table, indexes) = table.finish().await;
+        let (data_table, indexes) = table.finish();
 
         writer.write_all(&data_table)?;
         for &idx in &indexes {
