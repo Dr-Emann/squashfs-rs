@@ -11,6 +11,8 @@ pub struct Table<T, Comp> {
 }
 
 impl<T: AsBytes, Comp: Compressor> Table<T, Comp> {
+    const _T_SIZE_ASSERT: () = assert!(repr::metablock::SIZE % mem::size_of::<T>() == 0);
+
     pub fn new(compressor: Option<Comp>) -> Self {
         Self::with_capacity(compressor, 0)
     }
@@ -19,9 +21,7 @@ impl<T: AsBytes, Comp: Compressor> Table<T, Comp> {
         assert_eq!(repr::metablock::SIZE % mem::size_of::<T>(), 0);
         assert!(mem::size_of::<T>() < repr::metablock::SIZE);
 
-        // Round up to number of metablocks needed to store `cap` `T`s
-        let index_size =
-            (cap * mem::size_of::<T>() + repr::metablock::SIZE - 1) / repr::metablock::SIZE;
+        let index_size = cap * mem::size_of::<T>() / repr::metablock::SIZE;
         Self {
             data_writer: MetablockWriter::with_capacity(compressor, cap),
             index: Vec::with_capacity(index_size),
@@ -61,10 +61,4 @@ impl<T, Comp: Default> Default for Table<T, Comp> {
             _phantom: PhantomData::default(),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Data {
-    body: Vec<u8>,
-    index: Vec<u32>,
 }

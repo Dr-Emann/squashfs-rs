@@ -278,9 +278,7 @@ pub trait Decompressor {
 }
 
 fn copy(src: &[u8], dst: &mut [u8]) -> io::Result<usize> {
-    let dst = dst
-        .get_mut(..src.len())
-        .ok_or_else(|| io::ErrorKind::WriteZero)?;
+    let dst = dst.get_mut(..src.len()).ok_or(io::ErrorKind::WriteZero)?;
     dst.copy_from_slice(src);
     Ok(dst.len())
 }
