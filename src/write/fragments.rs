@@ -2,7 +2,7 @@ use crate::compression::AnyCodec;
 use crate::write::two_level;
 
 pub struct Table {
-    inner: two_level::Table<repr::fragment::Entry>,
+    inner: two_level::Table<repr::fragment::Entry, AnyCodec>,
     count: usize,
 }
 

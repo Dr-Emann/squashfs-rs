@@ -105,11 +105,23 @@ impl Mode {
     pub const PERM_MASK: Mode = Mode { bits: 0o007_777 };
     pub const TYPE_MASK: Mode = Mode { bits: 0o170_000 };
     pub const NONE: Mode = Mode { bits: 0 };
+
+    pub const fn perm(self) -> Self {
+        Self {
+            bits: self.bits & Self::PERM_MASK.bits,
+        }
+    }
+
+    pub const fn ty(self) -> Self {
+        Self {
+            bits: self.bits & Self::TYPE_MASK.bits,
+        }
+    }
 }
 
 impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_char = match *self & Mode::TYPE_MASK {
+        let type_char = match self.ty() {
             Mode::TYPE_DIR => 'd',
             Mode::TYPE_CHAR => 'c',
             Mode::TYPE_BLOCK => 'b',

@@ -1,17 +1,17 @@
 use super::metablock_writer::MetablockWriter;
-use crate::compression::AnyCodec;
+use crate::compression::Compressor;
 use crate::Mode;
 use std::convert::TryInto;
 use std::io;
 
 #[derive(Debug, Default)]
-pub struct Table {
-    writer: MetablockWriter,
+pub struct Table<Comp> {
+    writer: MetablockWriter<Comp>,
     count: u32,
 }
 
-impl Table {
-    pub fn new(compressor: Option<AnyCodec>) -> Self {
+impl<Comp: Compressor> Table<Comp> {
+    pub fn new(compressor: Option<Comp>) -> Self {
         Self {
             writer: MetablockWriter::new(compressor),
             count: 0,
@@ -317,12 +317,13 @@ pub struct DeviceData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compression::AnyCodec;
     use repr::inode as raw;
     use std::mem;
 
     #[test]
     fn add_entries() {
-        let mut table = Table::new(None);
+        let mut table = Table::<AnyCodec>::new(None);
 
         let common = Common {
             permissions: Default::default(),

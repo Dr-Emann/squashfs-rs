@@ -1,11 +1,12 @@
-use crate::compression::{compress_or_copy, AnyCodec, Compressor};
+use crate::compression::{compress_or_copy, Compressor};
 use crate::pool;
 use std::convert::TryInto;
+use std::fmt::{Debug, Formatter};
 use std::mem;
 use zerocopy::AsBytes;
 
-#[derive(Debug, Default)]
-pub struct MetablockWriter<Comp = AnyCodec> {
+#[derive(Default)]
+pub struct MetablockWriter<Comp> {
     compressor: Option<Comp>,
     output: Vec<u8>,
     current_block: Vec<u8>,
@@ -52,7 +53,8 @@ impl<Comp: Compressor> MetablockWriter<Comp> {
 
     fn flush(&mut self) {
         if let Some(compressor) = &mut self.compressor {
-            let mut dst = pool::block();
+            // TODO: 8k on the stack vs on the heap? Uninitialized?
+            let mut dst = [0; repr::metablock::SIZE];
             let (len, compressed) = compress_or_copy(compressor, &self.current_block, &mut dst);
 
             Self::write_output(&mut self.output, &dst[..len], compressed);
@@ -69,6 +71,16 @@ impl<Comp: Compressor> MetablockWriter<Comp> {
         output.reserve(header_bytes.len() + data.len());
         output.extend_from_slice(header_bytes);
         output.extend_from_slice(data);
+    }
+}
+
+impl<Comp> Debug for MetablockWriter<Comp> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MetablockWriter")
+            .field("finished_output_size", &self.output.len())
+            .field("current_block_size", &self.current_block.len())
+            .field("is_compressed", &self.compressor.is_some())
+            .finish()
     }
 }
 
@@ -123,7 +135,7 @@ mod tests {
             data: [u8; GIANT_SIZE],
         }
 
-        let mut writer = MetablockWriter::new(None);
+        let mut writer = MetablockWriter::<AnyCodec>::new(None);
 
         let big_t = GiantT {
             data: [0; GIANT_SIZE],

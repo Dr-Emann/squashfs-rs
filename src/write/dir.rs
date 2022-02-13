@@ -1,6 +1,5 @@
-use crate::compression::AnyCodec;
+use crate::compression::Compressor;
 use crate::write::metablock_writer::MetablockWriter;
-use futures::{Stream, StreamExt};
 use std::convert::TryInto;
 use std::mem;
 use zerocopy::AsBytes;
@@ -10,21 +9,21 @@ pub struct DirectoryInfo {
     uncompressed_size: u32,
 }
 
-pub struct Table {
-    writer: MetablockWriter,
+pub struct Table<Comp> {
+    writer: MetablockWriter<Comp>,
     // TODO: Is this correct, or should this be u64?
     total_size: usize,
 }
 
-impl Table {
-    pub fn new(compressor: Option<AnyCodec>) -> Self {
+impl<Comp: Compressor> Table<Comp> {
+    pub fn new(compressor: Option<Comp>) -> Self {
         Self {
             writer: MetablockWriter::new(compressor),
             total_size: 0,
         }
     }
 
-    fn start_dir(&mut self) -> DirBuilder<'_> {
+    fn start_dir(&mut self) -> DirBuilder<'_, Comp> {
         DirBuilder {
             table: self,
             header: repr::directory::Header {
@@ -37,14 +36,17 @@ impl Table {
         }
     }
 
-    pub async fn dir(&mut self, mut contents: impl Stream<Item = Entry> + Unpin) -> DirectoryInfo {
+    pub fn dir<IntoIt>(&mut self, contents: IntoIt) -> DirectoryInfo
+    where
+        IntoIt: IntoIterator<Item = Entry>,
+    {
         let start_size = self.total_size;
 
         let mut builder = self.start_dir();
         let mut header_refs = Vec::new();
 
-        while let Some(item) = contents.next().await {
-            if let Some(header_ref) = builder.add_entry(item) {
+        for entry in contents {
+            if let Some(header_ref) = builder.add_entry(entry) {
                 header_refs.push(header_ref);
             }
         }
@@ -63,8 +65,8 @@ impl Table {
     }
 }
 
-struct DirBuilder<'a> {
-    table: &'a mut Table,
+struct DirBuilder<'a, Comp> {
+    table: &'a mut Table<Comp>,
     header: repr::directory::Header,
     entries: Vec<u8>,
     crossed_metablock: bool,
@@ -91,7 +93,7 @@ const MIN_INODE_NUM_REF: repr::inode::Idx = repr::inode::Idx(i16::MIN.unsigned_a
 /// This can reference all inode numbers all the way up to the max inode number
 const MAX_INODE_NUM_REF: repr::inode::Idx = repr::inode::Idx(u32::MAX - i16::MAX as u32);
 
-impl DirBuilder<'_> {
+impl<Comp: Compressor> DirBuilder<'_, Comp> {
     /// Add a dir entry, returning the header pos, if this required a new header
     pub fn add_entry(&mut self, entry: Entry) -> Option<repr::directory::Ref> {
         let need_header = self.crossed_metablock
@@ -167,7 +169,7 @@ mod tests {
             inode_kind: repr::inode::Kind::BASIC_FILE,
             name: format!("b{:03}", i).into_bytes(),
         });
-        let header_refs = table.dir(futures::stream::iter(entries));
+        let header_refs = table.dir(entries);
 
         let (uncompressed_size, data) = table.finish();
         assert!(data.len() < uncompressed_size);

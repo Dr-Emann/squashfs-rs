@@ -1,21 +1,21 @@
 use super::metablock_writer::MetablockWriter;
-use crate::compression::AnyCodec;
+use crate::compression::Compressor;
 use std::marker::PhantomData;
 use std::{fmt, mem};
 use zerocopy::AsBytes;
 
-pub struct Table<T> {
-    data_writer: MetablockWriter,
+pub struct Table<T, Comp> {
+    data_writer: MetablockWriter<Comp>,
     index: Vec<u32>,
     _phantom: PhantomData<T>,
 }
 
-impl<T: AsBytes> Table<T> {
-    pub fn new(compressor: Option<AnyCodec>) -> Self {
+impl<T: AsBytes, Comp: Compressor> Table<T, Comp> {
+    pub fn new(compressor: Option<Comp>) -> Self {
         Self::with_capacity(compressor, 0)
     }
 
-    pub fn with_capacity(compressor: Option<AnyCodec>, cap: usize) -> Self {
+    pub fn with_capacity(compressor: Option<Comp>, cap: usize) -> Self {
         assert_eq!(repr::metablock::SIZE % mem::size_of::<T>(), 0);
         assert!(mem::size_of::<T>() < repr::metablock::SIZE);
 
@@ -44,7 +44,7 @@ impl<T: AsBytes> Table<T> {
     }
 }
 
-impl<T> fmt::Debug for Table<T> {
+impl<T, Comp> fmt::Debug for Table<T, Comp> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Table")
             .field("data_writer", &self.data_writer)
@@ -53,7 +53,7 @@ impl<T> fmt::Debug for Table<T> {
     }
 }
 
-impl<T> Default for Table<T> {
+impl<T, Comp: Default> Default for Table<T, Comp> {
     fn default() -> Self {
         Self {
             data_writer: MetablockWriter::default(),
