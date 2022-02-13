@@ -41,15 +41,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async_positioned_io"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "tempfile",
- "tokio",
-]
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -617,16 +608,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
-name = "positioned-io-preview"
-version = "0.3.3"
-source = "git+https://github.com/Dr-Emann/positioned-io.git?branch=write_at_shared_ref#334806b0f778dd415220778b09aa4260bdd1675f"
-dependencies = [
- "byteorder",
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -889,7 +870,6 @@ name = "sqfs"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "async_positioned_io",
  "bitflags",
  "bstr",
  "byteorder",
@@ -901,7 +881,6 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.0",
- "positioned-io-preview",
  "repr",
  "slog",
  "slog-stdlog",

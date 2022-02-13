@@ -5,9 +5,7 @@ use tempfile::tempfile;
 #[tokio::main]
 async fn main() {
     let f = tempfile().expect("Unable to open a temp file");
-    let mut archive = write::Archive::from_writer(Box::new(
-        positioned_io::RandomAccessFile::try_new(f).unwrap(),
-    ));
+    let mut archive = write::Archive::from_writer(f);
     println!("{:#?}", archive);
     // let contents = archive.create_file_contents(&[]);
     let mut root = archive.create_dir();

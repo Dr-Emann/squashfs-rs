@@ -7,7 +7,6 @@ mod two_level;
 mod uid_gid;
 
 use chrono::{DateTime, Utc};
-use positioned_io::RandomAccessFile;
 use std::path::Path;
 use std::{fmt, mem, ptr};
 use std::{fs, io};
@@ -15,7 +14,6 @@ use std::{fs, io};
 use bstr::BString;
 
 use crate::config::FragmentMode;
-use crate::shared_position_file::{Positioned, SharedWriteAt};
 
 use crate::compression;
 use crate::errors::Result;
@@ -23,14 +21,15 @@ use crate::Mode;
 use slog::Logger;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
+use std::fs::File;
 
 use swiss_reader::SparseRead;
 
 const MODE_DEFAULT_DIRECTORY: Mode = Mode::O755;
 const MODE_DEFAULT_FILE: Mode = Mode::O644;
 
-pub struct Archive {
-    file: Box<dyn SharedWriteAt>,
+pub struct Archive<W: io::Write> {
+    file: W,
     mtime: DateTime<Utc>,
     block_size: u32,
 
@@ -43,7 +42,7 @@ pub struct Archive {
     logger: Logger,
 }
 
-impl Archive {
+impl<W: io::Write> Archive<W> {
     pub fn create_file_contents<R>(&self, file: R)
     where
         R: SparseRead + Send,
@@ -68,7 +67,7 @@ impl SubdirBuilder {
     }
 }
 
-impl Archive {
+impl<W: io::Write> Archive<W> {
     pub fn begin_root(&self) -> SubdirBuilder {
         todo!()
     }
@@ -174,7 +173,7 @@ impl DirBuilder {
         self.entries.insert(name, item);
     }
 
-    pub fn finish(self, archive: &mut Archive) -> ItemRef {
+    pub fn finish<W: io::Write>(self, archive: &mut Archive<W>) -> ItemRef {
         // This is safe because self will not be dropped
         let entries = unsafe { ptr::read(&self.entries) };
         let item = Item {
@@ -235,17 +234,17 @@ impl FileBuilder {
         self
     }
 
-    pub fn finish(self, archive: &mut Archive) -> ItemRef {
+    pub fn finish<W: io::Write>(self, archive: &mut Archive<W>) -> ItemRef {
         todo!()
     }
 }
 
-impl Archive {
-    pub fn create<P: AsRef<Path>>(path: P) -> Result<Self> {
+impl<W: io::Write> Archive<W> {
+    pub fn create<P: AsRef<Path>>(path: P) -> Result<Archive<File>> {
         ArchiveBuilder::new().build_path(path)
     }
 
-    pub fn from_writer(writer: Box<dyn SharedWriteAt>) -> Self {
+    pub fn from_writer(writer: W) -> Self {
         ArchiveBuilder::new().build(writer)
     }
 
@@ -301,22 +300,21 @@ impl Archive {
             fragment_table_start: u64::MAX,
             export_table_start: u64::MAX,
         };
-        // TODO: data blocks? compression_options
+        // TODO: Compression options
+        // TODO: data blocks
         superblock.inode_table_start = mem::size_of_val(&superblock).try_into().unwrap();
-
-        let writer = Positioned::with_position(&*self.file, superblock.inode_table_start);
 
         todo!()
     }
 }
 
-impl Drop for Archive {
+impl<W: io::Write> Drop for Archive<W> {
     fn drop(&mut self) {
         let _ = self.flush();
     }
 }
 
-impl fmt::Debug for Archive {
+impl<W: io::Write> fmt::Debug for Archive<W> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Archive")
             .field("items", &self.items)
@@ -395,7 +393,7 @@ impl ArchiveBuilder {
         self
     }
 
-    pub fn build(self, writer: Box<dyn SharedWriteAt>) -> Archive {
+    pub fn build<W: io::Write>(self, writer: W) -> Archive<W> {
         self.validate();
 
         let logger = self.logger.unwrap_or_else(crate::default_logger);
@@ -416,17 +414,17 @@ impl ArchiveBuilder {
         }
     }
 
-    pub fn build_path<P: AsRef<Path>>(self, path: P) -> Result<Archive> {
+    pub fn build_path<P: AsRef<Path>>(self, path: P) -> Result<Archive<File>> {
         self._build_path(path.as_ref())
     }
 
-    fn _build_path(mut self, path: &Path) -> Result<Archive> {
+    fn _build_path(mut self, path: &Path) -> Result<Archive<File>> {
         let logger = self.logger.take().unwrap_or_else(crate::default_logger);
         let path_str = path.display().to_string();
         self.logger = Some(logger.new(slog::o!("file" => path_str)));
 
-        let file = RandomAccessFile::try_new(fs::File::create(path)?)?;
-        Ok(self.build(Box::new(file)))
+        let file = fs::File::create(path)?;
+        Ok(self.build(file))
     }
 }
 
