@@ -9,6 +9,7 @@ async fn main() {
         positioned_io::RandomAccessFile::try_new(f).unwrap(),
     ));
     println!("{:#?}", archive);
+    // let contents = archive.create_file_contents(&[]);
     let mut root = archive.create_dir();
 
     let mut child_dir = archive.create_dir();

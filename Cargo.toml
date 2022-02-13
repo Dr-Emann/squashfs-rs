@@ -17,6 +17,7 @@ lz4 = []
 positioned_io = { package = "positioned-io-preview", version = "0.3.3", git = "https://github.com/Dr-Emann/positioned-io.git", branch = "write_at_shared_ref" }
 repr = { path = "repr" }
 async_positioned_io = { path = "async_positioned_io" }
+swiss-reader = { path = "swiss-reader" }
 
 async-trait = "0.1.51"
 bitflags = "1.2"
